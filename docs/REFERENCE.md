@@ -56,6 +56,18 @@ hand-written.
 
 The golden file is checked in; normal builds do not need Rust, Node or the submodule.
 
+## Splitter differential
+
+`splitter-dump` reads `{markdown, options}` JSONL on stdin and prints the reference chunks as
+JSON, so the Java `Splitter` can be compared on the same inputs:
+
+```shell
+cargo run --quiet --release --manifest-path tools/reference/Cargo.toml \
+  --bin splitter-dump < cases.jsonl
+```
+
+It is a manual parity aid. `SplitterTest` ports the 31 upstream unit tests and needs no Rust.
+
 ## Options JSON
 
 The bridge accepts the same shape as the Java API:
