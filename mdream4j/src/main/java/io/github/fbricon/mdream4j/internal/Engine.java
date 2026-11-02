@@ -39,10 +39,16 @@ public final class Engine {
   }
 
   public static MdreamResult convertResult(CharSequence html, Options options) {
+    return convertResult(html, options, true);
+  }
+
+  /** One-shot conversion with the plain-text fast paths optionally disabled. */
+  static MdreamResult convertResult(CharSequence html, Options options, boolean fastPaths) {
     Objects.requireNonNull(html, "html");
     Options resolved = options == null ? Options.defaults() : options;
     String source = html.toString();
     ConvertState state = new ConvertState(resolved, oneShotCapacity(source.length()));
+    state.fastPaths = fastPaths;
     int consumed = ParseOps.processHtml(state, source);
     ParseOps.finalizeState(state, source.substring(consumed));
     String markdown = OutputOps.getMarkdown(state);

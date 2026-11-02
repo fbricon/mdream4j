@@ -285,13 +285,20 @@ The conformance corpus is library-owned. Add a small **consumer-shaped** suite (
 `<html>`, Javadoc-style tables, `file:` links, sloppy markup, concurrent calls) that exercises the
 guarantees in §8.2. Consumer migration is tracked separately in `docs/CONSUMERS.md`.
 
-### 6.6 Deferred fast paths
+### 6.6 Fast paths
 
-The upstream text fast path (`parse.rs::text_node_fast_path_ok` /
-`process_plain_text_node` and `output.rs::emit_plain_text_inline`) is a performance
-specialisation that bypasses the general text emitter. The port always takes
-`processTextBufferPiece` for now. Port and wire it during the benchmark milestone,
-with differential tests proving identical output.
+Ported. `ParseOps.processTextBuffer` gates on `textNodeFastPathOk`
+(`parse.rs::text_node_fast_path_ok`), which routes to `processPlainTextNode` and
+`OutputOps.emitPlainTextInline` when no per-node state needs the general emitter. The
+gate mirrors upstream exactly: markdown format, no `maxNodeBytes`, no `wrapWidth`, no
+caption/list-rule/pending-whitespace/pending-raw-boundary/pre-fence state, `PRE` and
+`CODE` depth zero, not inside `pre`, no overflow, no extraction, and no title or
+tailwind parent.
+
+`ConvertState.fastPaths` is a test switch (like `disableDrain`); `FastPathParityTest`
+compares both paths over the whole corpus, one-shot and streamed at several chunk
+sizes, and asserts the gate is on for default Markdown and off for wrapped, capped and
+text output.
 
 ---
 

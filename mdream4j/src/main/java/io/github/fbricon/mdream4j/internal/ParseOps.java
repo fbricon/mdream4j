@@ -279,7 +279,101 @@ final class ParseOps {
   // === Text buffering ===
 
   static void processTextBuffer(ConvertState self, StringBuilder textBuffer) {
-    processTextBufferPiece(self, textBuffer, true);
+    if (textNodeFastPathOk(self)) {
+      processPlainTextNode(self, textBuffer);
+    } else {
+      processTextBufferPiece(self, textBuffer, true);
+    }
+  }
+
+  /** Gate for {@link #processPlainTextNode}: no per-node state needs the general path. */
+  static boolean textNodeFastPathOk(ConvertState self) {
+    if (!OutputOps.textFastPathOk(self) || self.inPre || self.overflowTagId >= 0) {
+      return false;
+    }
+    if (self.overflowOpaqueDepth != 0 || self.overflowRawExcludesText) {
+      return false;
+    }
+    if (!self.extractionTracked.isEmpty()) {
+      return false;
+    }
+    // Tailwind-wrapped text takes the general path.
+    ElementNode parent = self.stack.size() == 0 ? null : self.stack.get(self.stack.size() - 1);
+    return parent == null
+        || (parent.tagId != Consts.TAG_TITLE
+            && (!self.hasTailwind || parent.tailwind() == null));
+  }
+
+  /** {@link #processTextBufferPiece} for {@link #textNodeFastPathOk} nodes. */
+  static void processPlainTextNode(ConvertState self, StringBuilder textBuffer) {
+    boolean containsNonWhitespace = self.textBufferContainsNonWhitespace;
+    boolean containsWhitespace = self.textBufferContainsWhitespace;
+    boolean hasInlineGfmHazard = self.textBufferHasInlineGfmHazard || self.hasEncodedHtmlEntity;
+    self.textBufferContainsNonWhitespace = false;
+    self.textBufferContainsWhitespace = false;
+    self.textBufferBatchableLen = 0;
+    self.textBufferHasInlineGfmHazard = false;
+
+    ElementNode parent = self.stack.size() == 0 ? null : self.stack.get(self.stack.size() - 1);
+    boolean excludesTextNodes =
+        parent != null
+            && (parent.excludesTextNodes
+                || (!self.overflowIncluded && parent.excludedFromMarkdown));
+    int childTextNodeIndex = parent != null ? parent.childTextNodeIndex : 0;
+
+    if (self.hasIsolateMain && isolateMainExcludes(self)) {
+      excludesTextNodes = true;
+    }
+
+    if (!containsNonWhitespace && childTextNodeIndex == 0 && self.stack.size() != 0) {
+      return;
+    }
+    if (textBuffer.length() == 0) {
+      return;
+    }
+
+    int firstBlockParentIndex = self.firstBlockParentIndex;
+    int firstBlockChildTextCount =
+        firstBlockParentIndex >= 0 ? self.stack.get(firstBlockParentIndex).childTextNodeIndex : 0;
+
+    boolean isFirstTextInBlock =
+        firstBlockChildTextCount == 0
+            && (firstBlockParentIndex >= 0
+                || self.buffer.length() == 0
+                || self.buffer.charAt(self.buffer.length() - 1) == '\n');
+    if (containsWhitespace && isFirstTextInBlock) {
+      int start = 0;
+      while (start < textBuffer.length() && Scan.isWhitespace(textBuffer.charAt(start))) {
+        start++;
+      }
+      if (start > 0) {
+        textBuffer.delete(0, start);
+      }
+    }
+
+    // Only raw HTML leaves decoded references unprotected.
+    if (self.hasEncodedHtmlEntity) {
+      boolean protect = !self.rawHtmlBlockOpen;
+      if (Entities.decodeInto(textBuffer, false, protect, self.entityBuffer)) {
+        swap(textBuffer, self.entityBuffer);
+      }
+      self.hasEncodedHtmlEntity = false;
+    }
+
+    if (!excludesTextNodes) {
+      String text = textBuffer.toString();
+      int depth = self.depth;
+      int index = parent != null ? parent.currentWalkIndex : 0;
+      self.textBufferHasInlineGfmHazard = hasInlineGfmHazard;
+      if (self.link.emptyTextPending && !Chars.trimUnicode(text).isEmpty()) {
+        self.link.emptyTextPending = false;
+      }
+      OutputOps.emitPlainTextInline(self, text, containsWhitespace, depth, index);
+    }
+
+    textBuffer.setLength(0);
+
+    advanceTextNodeCounters(self, firstBlockParentIndex);
   }
 
   static void processTextBufferPiece(

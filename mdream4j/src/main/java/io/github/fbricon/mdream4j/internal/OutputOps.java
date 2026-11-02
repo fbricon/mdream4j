@@ -1014,6 +1014,73 @@ final class OutputOps {
     self.lastNodeIsInline = false;
   }
 
+  /** Context for {@link #emitPlainTextInline}: no clamp, defer, indent or wrap state. */
+  static boolean textFastPathOk(ConvertState self) {
+    return self.isMarkdown()
+        && self.maxNodeBytesInt == 0
+        && self.wrapWidth == 0
+        && self.captionBoundary == ConvertState.CAPTION_BOUNDARY_NONE
+        && self.captionFrames.isEmpty()
+        && !self.listRulePending
+        && !self.pendingInlineWhitespace
+        && !self.pendingRawHtmlBoundary
+        && !self.preFencePending
+        && self.depthMap[Consts.TAG_PRE] == 0
+        && self.depthMap[Consts.TAG_CODE] == 0
+        && self.fastPathsEnabled();
+  }
+
+  /**
+   * Specialisation of {@link #emitTextWithGeneratedMarkdown} for {@link #textFastPathOk} nodes:
+   * the general path's clamp, defer, indent, wrap, caption and tailwind branches are all inert
+   * here, so skip them.
+   */
+  static void emitPlainTextInline(
+      ConvertState self, String text, boolean containsWhitespace, int depth, int index) {
+    boolean hasInlineGfmHazard = self.textBufferHasInlineGfmHazard;
+    self.textBufferHasInlineGfmHazard = false;
+    if (text.isEmpty()) {
+      return;
+    }
+    // Text inside a cell the row cap already dropped.
+    if (self.inTableCell() && self.tableCurrentRowCells >= self.tableColumnCap) {
+      self.truncated = true;
+      return;
+    }
+    int lastChar = lastOutputByte(self);
+    if (collapsesIntoSpace(text, lastChar)) {
+      return;
+    }
+    boolean insideRawHtmlBlock = self.rawHtmlBlockOpen;
+    if (insideRawHtmlBlock) {
+      trackRawHtmlMarkdownContext(self, self.buffer.length());
+      text = escapeRawHtmlText(self, text);
+    } else {
+      self.rawHtmlMarkdown = false;
+      self.rawHtmlScannedTo = self.buffer.length();
+    }
+
+    boolean inTable = self.depthMap[Consts.TAG_TABLE] > 0;
+    boolean inLink = self.depthMap[Consts.TAG_A] > 0;
+    boolean inQuote = self.depthMap[Consts.TAG_BLOCKQUOTE] > 0;
+    boolean contextHasGfmHazard =
+        !insideRawHtmlBlock && contextGfmHazard(text, inTable, inLink, inQuote);
+    boolean hazard =
+        hasInlineGfmHazard || contextHasGfmHazard || startsWithGfmBlockCandidate(self, text);
+    boolean rawHtmlEscapeAllowed =
+        !insideRawHtmlBlock || (self.rawHtmlMarkdown && !lineOpensRawHtmlBlock(self));
+    if (hazard && rawHtmlEscapeAllowed) {
+      String escaped = escapeGfmTextInto(self, text);
+      if (escaped != null) {
+        text = escaped;
+      }
+    }
+
+    boolean addSpace = shouldAddSpacingBeforeText(self, lastChar, text);
+    pushTextUncapped(self, text, addSpace);
+    finishTextNode(self, text, containsWhitespace, depth, index);
+  }
+
   // === Text emission ===
 
   static void emitText(

@@ -36,9 +36,15 @@ final class ConverterStream implements MarkdownStream {
    * modes; mirrors {@code MarkdownStreamProcessor::new_drain_disabled}.
    */
   ConverterStream(Options options, boolean disableDrain) {
+    this(options, disableDrain, true);
+  }
+
+  /** Builds a stream with draining and the plain-text fast paths optionally disabled. */
+  ConverterStream(Options options, boolean disableDrain, boolean fastPaths) {
     this.state = new ConvertState(options, STREAM_START_CAPACITY);
     this.state.streaming = true;
     this.state.disableDrain = disableDrain;
+    this.state.fastPaths = fastPaths;
   }
 
   @Override

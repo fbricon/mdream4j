@@ -199,6 +199,8 @@ final class ConvertState {
   int cutLineLeadIndent;
   /** Test switch: skip draining so on/off outputs can be compared. */
   boolean disableDrain;
+  /** Test switch: skip the plain-text fast paths so on/off outputs can be compared. */
+  boolean fastPaths = true;
 
   boolean retainsWholeDocument() {
     return (cleanFlags & CLEAN_FRAGMENTS) != 0;
@@ -387,6 +389,11 @@ final class ConvertState {
 
   boolean inRawHtmlBlock() {
     return rawHtmlBlockOpen;
+  }
+
+  /** Fast paths are on; tests can turn them off so both paths can be compared. */
+  boolean fastPathsEnabled() {
+    return fastPaths;
   }
 
   int rawHtmlBlockDepth() {
