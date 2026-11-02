@@ -186,7 +186,8 @@ mdream4j/
 │   │   │   TagOverride.java, IsolateMain.java, Tailwind.java
 │   │   ├── OutputFormat.java          # enum
 │   │   ├── MdreamResult.java, ExtractedElement.java
-│   │   ├── Splitter.java, MarkdownChunk.java, ChunkMetadata.java
+│   │   ├── Splitter.java, SplitterOptions.java, MarkdownChunk.java, ChunkMetadata.java,
+│   │   │   ChunkLoc.java
 │   │   └── internal/                  # not exported
 │   │       ├── Consts.java, TagHandler.java, Tags.java
 │   │       ├── Entities.java, EntityTable.java

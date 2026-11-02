@@ -73,6 +73,22 @@ public final class Options {
     return format;
   }
 
+  /** Returns these options with a different output format, reusing this instance when unchanged. */
+  Options withFormat(OutputFormat newFormat) {
+    Objects.requireNonNull(newFormat, "format");
+    if (format == newFormat) {
+      return this;
+    }
+    Builder builder = new Builder();
+    builder.origin = origin;
+    builder.clean = clean;
+    builder.plugins = plugins;
+    builder.wrapWidth = wrapWidth;
+    builder.maxNodeBytes = maxNodeBytes;
+    builder.format = newFormat;
+    return new Options(builder);
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
