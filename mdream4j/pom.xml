@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.github.fbricon</groupId>
+    <artifactId>mdream4j-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>mdream4j</artifactId>
+  <name>mdream4j</name>
+  <description>Fast, dependency-free HTML to Markdown converter for Java: a port of mdream</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>biz.aQute.bnd</groupId>
+        <artifactId>bnd-maven-plugin</artifactId>
+        <version>${bnd.version}</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>bnd-process</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <bnd><![CDATA[
+Bundle-SymbolicName: io.github.fbricon.mdream4j
+Bundle-Name: mdream4j
+Bundle-Vendor: mdream4j contributors
+Bundle-DocURL: https://github.com/fbricon/mdream4j
+Bundle-SCM: url="https://github.com/fbricon/mdream4j",connection="scm:git:https://github.com/fbricon/mdream4j.git",developer-connection="scm:git:git@github.com:fbricon/mdream4j.git",tag=HEAD
+Bundle-RequiredExecutionEnvironment: JavaSE-11
+Export-Package: io.github.fbricon.mdream4j;version="${project.version}"
+Private-Package: io.github.fbricon.mdream4j.internal
+-noimportjava: true
+          ]]></bnd>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <archive>
+            <manifestFile>${project.build.directory}/classes/META-INF/MANIFEST.MF</manifestFile>
+          </archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals>
+              <goal>jar-no-fork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
