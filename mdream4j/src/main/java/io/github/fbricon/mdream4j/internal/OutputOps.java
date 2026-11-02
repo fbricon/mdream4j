@@ -2897,6 +2897,9 @@ final class OutputOps {
         && node.attributes.getBit(Consts.ATTR_HREF) != null
         && Url.isEmptyLinkHref(node.attributes.getBit(Consts.ATTR_HREF))) {
       beginLink(self, self.buffer.length(), true, false);
+      if (self.streaming) {
+        self.link.holdReleased = true;
+      }
       self.lastNodeIsInline = isInline;
       return;
     }
@@ -2913,6 +2916,7 @@ final class OutputOps {
       int bracketPos = emittedBracket ? bufLen - 1 : bufLen;
       beginLink(self, bracketPos, false, false);
       self.link.bracketEmitted = emittedBracket;
+      prepareStreamingLink(self, node, emittedBracket);
       if (!self.openMarkers.isEmpty()
           && (self.cleanFlags & ConvertState.CLEAN_EMPTY_LINK_TEXT) == 0
           && output != null
@@ -3290,8 +3294,10 @@ final class OutputOps {
         int bracketPos = emittedBracket ? self.buffer.length() - 1 : self.buffer.length();
         beginLink(self, bracketPos, false, rawHtmlLinkOpen);
         self.link.bracketEmitted = emittedBracket;
+        prepareStreamingLink(self, node, emittedBracket && !exitIsOverridden);
       } else {
         beginLink(self, self.buffer.length(), false, rawHtmlLinkOpen);
+        prepareStreamingLink(self, node, false);
       }
       if (!self.openMarkers.isEmpty()
           && (self.cleanFlags & ConvertState.CLEAN_EMPTY_LINK_TEXT) == 0
@@ -3948,6 +3954,16 @@ final class OutputOps {
         self.codeFence.contentStart += amount;
       }
     }
+    for (ConvertState.CaptionFrame frame : self.captionFrames) {
+      if (frame.state == ConvertState.CAPTION_TENTATIVE) {
+        if (frame.tentativeOutputStart >= at) {
+          frame.tentativeOutputStart += amount;
+        }
+        if (frame.tentativeContentStart >= at) {
+          frame.tentativeContentStart += amount;
+        }
+      }
+    }
     for (ConvertState.BlockquoteFrame frame : self.blockquotes) {
       // Upstream deliberately does not shift blockquote content starts.
     }
@@ -3956,6 +3972,195 @@ final class OutputOps {
   static void flushSettledBlockquoteLines(ConvertState self) {
     // Blockquote frame materialisation is part of the full output port; the
     // queue is empty until frames are created.
+  }
+
+  // === Streaming ===
+
+  /** Slack for the separators {@code resolveUrl} may add around an origin and an href. */
+  private static final int URL_RESOLVE_SLACK = 6;
+
+  /** Start of the ASCII whitespace run ending at {@code end}. */
+  private static int trailingAsciiWhitespaceStart(CharSequence buffer, int end) {
+    int start = Math.min(end, buffer.length());
+    while (start > 0 && Chars.isAsciiWhitespace(buffer.charAt(start - 1))) {
+      start--;
+    }
+    return start;
+  }
+
+  /** Highest offset that still holds the whitespace run before {@code at}. */
+  private static int holdBefore(CharSequence buffer, int at) {
+    return trailingAsciiWhitespaceStart(buffer, Math.min(at, buffer.length()));
+  }
+
+  /** Highest offset that still keeps the two bytes before {@code at}. */
+  private static int keepTwoBefore(int at) {
+    return Math.max(0, at - 2);
+  }
+
+  /**
+   * Whether the close of {@code link} can still rewrite the bytes before its bracket, so the
+   * stream must hold them back.
+   */
+  private static boolean linkHoldRequired(ConvertState self, ConvertState.LinkOutputState link) {
+    if (!link.open || link.holdReleased) {
+      return false;
+    }
+    if (link.holdForever || link.emptyTextPending) {
+      return true;
+    }
+    if (!self.openMarkers.isEmpty() || !self.codeSpans.isEmpty()) {
+      return true;
+    }
+    int textStart = link.bracketPos + 1;
+    int textEnd = trailingAsciiWhitespaceStart(self.buffer, self.buffer.length());
+    return textEnd - textStart <= link.urlMaxLen;
+  }
+
+  /** Earliest bracket position among open links the stream still holds. */
+  private static int openLinkHoldFloor(ConvertState self) {
+    int floor = Integer.MAX_VALUE;
+    if (linkHoldRequired(self, self.link)) {
+      floor = self.link.bracketPos;
+    }
+    for (ConvertState.LinkOutputState parent : self.parentLinks) {
+      if (linkHoldRequired(self, parent)) {
+        floor = Math.min(floor, parent.bracketPos);
+      }
+    }
+    return floor == Integer.MAX_VALUE ? -1 : floor;
+  }
+
+  /** Records the link bookkeeping that only streaming needs. */
+  static void prepareStreamingLink(
+      ConvertState self, ElementNode node, boolean rewriteAnchor) {
+    if (!self.streaming) {
+      return;
+    }
+    String href = node.attributes.getBit(Consts.ATTR_HREF);
+    boolean pinsOutput =
+        rewriteAnchor
+            && href != null
+            && href.startsWith("#")
+            && (((self.cleanFlags & ConvertState.CLEAN_FRAGMENTS) != 0 && href.length() > 1)
+                || ((self.cleanFlags & ConvertState.CLEAN_SELF_LINK_HEADINGS) != 0
+                    && self.inHeading()));
+    self.link.pinsOutput = pinsOutput;
+    self.link.emptyTextPending =
+        rewriteAnchor && (self.cleanFlags & ConvertState.CLEAN_EMPTY_LINK_TEXT) != 0;
+    self.link.holdForever = pinsOutput;
+    self.link.holdReleased = !rewriteAnchor;
+    int originLen = self.origin == null ? 0 : self.origin.length();
+    self.link.urlMaxLen = href == null ? 0 : URL_RESOLVE_SLACK + originLen + 1 + href.length();
+  }
+
+  private static boolean isHeadingRunChar(char c) {
+    return c == '#' || c == ' ' || c == '\t';
+  }
+
+  /**
+   * The bytes that are already final. Mirrors {@code get_markdown_chunk}: hold back trailing
+   * whitespace and everything a still-open construct can rewrite, then yield what precedes it.
+   */
+  static String getMarkdownChunk(ConvertState self) {
+    if (self.htmlFormat) {
+      int len = self.buffer.length();
+      if (len > 0) {
+        self.flushedTail[1] = self.buffer.charAt(len - 1);
+      }
+      String out = self.buffer.toString();
+      self.buffer.setLength(0);
+      self.lastYieldedLength = 0;
+      return out;
+    }
+    if (!self.plainText && (self.cleanFlags & ConvertState.CLEAN_FRAGMENTS) != 0) {
+      return "";
+    }
+    flushSettledBlockquoteLines(self);
+
+    int bufLen = self.buffer.length();
+    boolean inPre = self.depthMap[Consts.TAG_PRE] != 0 && self.preFenceOwnerDepth != 0;
+    int stableEnd = trailingAsciiWhitespaceStart(self.buffer, bufLen);
+    if (inPre && !self.lastTextNodeContainsWhitespace) {
+      // Other trailing spaces inside <pre> are significant code. A line-leading run is the
+      // exception: list continuation indentation can still be replaced by its list marker.
+      int spaces = bufLen;
+      while (spaces > 0 && self.buffer.charAt(spaces - 1) == ' ') {
+        spaces--;
+      }
+      stableEnd = spaces;
+      if (stableEnd > 0 && self.buffer.charAt(stableEnd - 1) != '\n') {
+        stableEnd = bufLen;
+      }
+    }
+
+    int leading;
+    if (self.preserveLeadingWhitespace || self.hasStreamedOutput) {
+      leading = 0;
+    } else {
+      int start = 0;
+      while (start < bufLen && Chars.isUnicodeWhitespace(self.buffer.charAt(start))) {
+        start++;
+      }
+      leading = start;
+    }
+
+    if (!self.openMarkers.isEmpty()) {
+      stableEnd = Math.min(stableEnd, holdBefore(self.buffer, self.openMarkers.get(0).outputStart));
+    }
+    int tentativeCaption = firstTentativeCaptionStart(self);
+    if (tentativeCaption >= 0) {
+      stableEnd = Math.min(stableEnd, holdBefore(self.buffer, tentativeCaption));
+    }
+    if (!self.codeSpans.isEmpty()) {
+      stableEnd = Math.min(stableEnd, holdBefore(self.buffer, self.codeSpans.get(0).outputStart));
+    }
+    if (self.codeFence != null) {
+      stableEnd = Math.min(stableEnd, holdBefore(self.buffer, self.codeFence.outputStart));
+    }
+    if (!self.blockquotes.isEmpty()) {
+      stableEnd = Math.min(stableEnd, holdBefore(self.buffer, self.blockquotes.get(0).contentStart));
+    }
+    int linkFloor = openLinkHoldFloor(self);
+    if (linkFloor >= 0) {
+      stableEnd = Math.min(stableEnd, holdBefore(self.buffer, linkFloor));
+    }
+    if (self.emptyItemHazard) {
+      stableEnd = Math.min(stableEnd, keepTwoBefore(self.emptyItemLineStart));
+    }
+    if (self.inHeading()) {
+      int run = Math.min(stableEnd, bufLen);
+      while (run > 0 && isHeadingRunChar(self.buffer.charAt(run - 1))) {
+        run--;
+      }
+      stableEnd = run;
+    }
+
+    int start = Math.max(self.lastYieldedLength, leading);
+    if (start >= stableEnd) {
+      return "";
+    }
+    String out = self.buffer.substring(start, stableEnd);
+    self.hasStreamedOutput = true;
+    self.lastYieldedLength = stableEnd;
+    if (self.link.open && stableEnd > self.link.bracketPos) {
+      self.link.holdReleased = true;
+    }
+    for (ConvertState.LinkOutputState parent : self.parentLinks) {
+      if (stableEnd > parent.bracketPos) {
+        parent.holdReleased = true;
+      }
+    }
+    return out;
+  }
+
+  static String getFinalMarkdownChunk(ConvertState self) {
+    if (!self.plainText
+        && !self.htmlFormat
+        && (self.cleanFlags & ConvertState.CLEAN_FRAGMENTS) != 0) {
+      return getMarkdown(self);
+    }
+    return getMarkdownChunk(self);
   }
 
   // === Final output ===

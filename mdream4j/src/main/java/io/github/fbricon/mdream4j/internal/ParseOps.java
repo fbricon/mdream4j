@@ -1683,6 +1683,7 @@ final class ParseOps {
         return chunkLength;
       }
       i = resume.newPosition;
+      self.attrScratch = pending.attrs;
       OpeningTagResult result =
           applyOpeningTag(
               self,

@@ -51,7 +51,8 @@ public final class Engine {
   }
 
   public static MarkdownStream newStream(Options options) {
-    throw new UnsupportedOperationException("mdream4j streaming is not implemented yet (M5)");
+    Options resolved = options == null ? Options.defaults() : options;
+    return new ConverterStream(resolved);
   }
 
   /** Reserve low: output runs from a tenth of the input to over half. */
