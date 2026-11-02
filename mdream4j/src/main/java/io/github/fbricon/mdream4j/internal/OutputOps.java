@@ -2360,7 +2360,6 @@ final class OutputOps {
     }
 
     if (configuredNewLines == 0 && !self.lastTextNodeContainsWhitespace) {
-      int bufLen = self.buffer.length();
       int lastChar = lastOutputByte(self);
       if (isEnter
           && !literal
@@ -4471,9 +4470,8 @@ final class OutputOps {
         }
       }
     }
-    for (ConvertState.BlockquoteFrame frame : self.blockquotes) {
-      // Upstream deliberately does not shift blockquote content starts.
-    }
+    // Upstream deliberately does not shift blockquote content starts: blockquote frames keep
+    // their absolute content offset.
   }
 
   static void flushSettledBlockquoteLines(ConvertState self) {

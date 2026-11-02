@@ -662,7 +662,6 @@ public final class Url {
   /** {@code out} must end with {@code /}, and does so again after every segment. */
   private static void pushPathSegments(StringBuilder out, String path, int rootLen) {
     int start = 0;
-    int len = path.length();
     while (true) {
       int slash = path.indexOf('/', start);
       boolean hasNext = slash >= 0;

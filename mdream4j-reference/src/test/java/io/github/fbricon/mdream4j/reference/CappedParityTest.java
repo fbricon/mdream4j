@@ -5,7 +5,6 @@
  */
 package io.github.fbricon.mdream4j.reference;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.fbricon.mdream4j.Clean;
