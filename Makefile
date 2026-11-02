@@ -1,6 +1,6 @@
 CARGO ?= cargo
 
-.PHONY: reference corpus goldens test clean bench bench-digests
+.PHONY: reference corpus goldens test clean bench bench-digests native-smoke
 
 reference:
 	$(CARGO) build --release --manifest-path tools/reference/Cargo.toml
@@ -17,6 +17,9 @@ bench:
 
 bench-digests: reference
 	node tools/bench/digests.mjs
+
+native-smoke:
+	./tools/native-smoke/run.sh
 
 test: reference
 	./mvnw -Pwith-reference verify
