@@ -340,6 +340,11 @@ function wrapOptions(call, bindings) {
   return width == null ? null : { wrapWidth: width };
 }
 
+function cappedOptions(call, bindings) {
+  const cap = call.args.length > 1 ? resolveNumber(call.args[1], bindings, call.position) : null;
+  return cap == null ? null : { maxNodeBytes: cap };
+}
+
 export function collectRustCases(upstream) {
   const tests = `${upstream}/crates/core/tests`;
   const cases = [];
@@ -361,6 +366,12 @@ export function collectRustCases(upstream) {
       { name: "md" },
       { name: "text" },
       { name: "md_wrapped", options: wrapOptions },
+    ]),
+  );
+  cases.push(
+    ...collectFile(`${tests}/max_node_bytes.rs`, "rust-cap", [
+      { name: "assert_capped_text", options: cappedOptions },
+      { name: "assert_capped_inline_code", options: cappedOptions },
     ]),
   );
   return cases;

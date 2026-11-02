@@ -737,3 +737,32 @@
 {"id":"rust-ws-039","html":"x <a href=\"/x\">A <i></i></a>y","options":{}}
 {"id":"rust-ws-040","html":"<a href=\"/x\" title=\"Ab \">Ab <span></span></a>","options":{}}
 {"id":"rust-ws-041","html":"<ul><li><a href=\"/x\">q<br> </a></li></ul>","options":{}}
+{"id":"rust-cap-001","html":"<textarea>aaaaaaaaaaaaaaaéz</textarea>","options":{"maxNodeBytes":16}}
+{"id":"rust-cap-002","html":"<textarea>aaaaaaaaaaaaaaaa<z</textarea>","options":{"maxNodeBytes":16}}
+{"id":"rust-cap-003","html":"<title>aaaaaaaaaaaaaaaa<z</title>","options":{"maxNodeBytes":16}}
+{"id":"rust-cap-004","html":"<textarea>aaaaaaaaaaaaaaa</x","options":{"maxNodeBytes":16}}
+{"id":"rust-cap-005","html":"<title>aaaaaaaaaaaaaaa</x","options":{"maxNodeBytes":16}}
+{"id":"rust-cap-006","html":"<p>aaaéz</p><p>ok</p>","options":{"maxNodeBytes":4}}
+{"id":"rust-cap-007","html":"<p>aaaé<abcdefgh>ok</p>","options":{"maxNodeBytes":4}}
+{"id":"rust-cap-008","html":"<textarea>aaaaaaaaaaaaaaaé</not-a-real-rawtext>ok</textarea>","options":{"maxNodeBytes":16}}
+{"id":"rust-cap-009","html":"<textarea>aa</abcdefghijklmnop>z</textarea>","options":{"maxNodeBytes":16}}
+{"id":"rust-cap-010","html":"<!-->z","options":{"maxNodeBytes":1}}
+{"id":"rust-cap-011","html":"<!--->z","options":{"maxNodeBytes":1}}
+{"id":"rust-cap-012","html":"<!","options":{"maxNodeBytes":1}}
+{"id":"rust-cap-013","html":"<code><span>ab</span><span>cd</span><span>ef</span><span>gh</span><span>ij</span></code><p>after</p>","options":{"maxNodeBytes":8}}
+{"id":"rust-cap-014","html":"<code><span>aaaaaaa</span><span>é</span><span>z</span></code>","options":{"maxNodeBytes":8}}
+{"id":"rust-cap-015","html":"<code><span>aaaaaa</span><span>é</span></code>","options":{"maxNodeBytes":8}}
+{"id":"rust-cap-016","html":"<code>a<br>b<br>c<br>d<br>e</code>","options":{"maxNodeBytes":8}}
+{"id":"rust-cap-017","html":"<code><em>abcde</em><span>x</span><span>y</span></code>","options":{"maxNodeBytes":8}}
+{"id":"rust-cap-018","html":"<code><span>abcdefgh</span><em>x</em></code>","options":{"maxNodeBytes":8}}
+{"id":"rust-cap-019","html":"<code><span>``abcdef</span><span>g</span></code>","options":{"maxNodeBytes":8}}
+{"id":"rust-cap-020","html":"<code><span>abcdefgh</span><code>x</code><span>y</span></code><p>after</p>","options":{"maxNodeBytes":8}}
+{"id":"rust-cap-021","html":"<code>abcdefgh<pre><code>x</code></pre></code><p>after</p>","options":{"maxNodeBytes":8}}
+{"id":"rust-cap-022","html":"<code><span>abcdefgh</span><span>ij","options":{"maxNodeBytes":8}}
+{"id":"rust-cap-023","html":"<code><a href=x>abcdefghijklmn</a><span>z</span></code>","options":{"maxNodeBytes":16}}
+{"id":"rust-cap-024","html":"<code><em>a </em>bcdefgh</code>","options":{"maxNodeBytes":8}}
+{"id":"rust-cap-025","html":"<code><br><details>x</details>y</code>tail","options":{"maxNodeBytes":10}}
+{"id":"rust-cap-026","html":"<ul><li><code><br><details>x</details>y</code>tail</li></ul>","options":{"maxNodeBytes":12}}
+{"id":"rust-cap-027","html":"<code><br><details>x</details><blockquote>q</blockquote></code>tail","options":{"maxNodeBytes":10}}
+{"id":"rust-cap-028","html":"<code><span>12345678</span><a href=http://x>http://x</a></code>","options":{"maxNodeBytes":19}}
+{"id":"rust-cap-029","html":"<table><tr><td><code>a|b|c|d</code></td></tr></table>","options":{"maxNodeBytes":8}}
