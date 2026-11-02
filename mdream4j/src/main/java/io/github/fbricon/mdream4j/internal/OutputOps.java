@@ -1307,6 +1307,7 @@ final class OutputOps {
 
     boolean ownsSpace =
         ownsLeadingSpace || (self.plainText && self.depthMap[Consts.TAG_PRE] > 0);
+    int writtenFrom = self.buffer.length();
     if (self.wrapWidth != 0 && canWrapHere(self)) {
       pushTextWrapped(self, text, lastChar, ownsLeadingSpace, relocatedSpace);
     } else if (self.maxNodeBytesInt == 0) {
@@ -1322,6 +1323,17 @@ final class OutputOps {
       self.lastContentCacheLen = written + pushCodeSpanContent(self, text, false);
     } else {
       self.lastContentCacheLen = pushCodeSpanContent(self, text, false);
+    }
+
+    if (self.maxNodeBytesInt != 0 && self.inHeading() && writtenFrom <= self.buffer.length()) {
+      int written = self.buffer.length() - writtenFrom;
+      int run = 0;
+      int i = self.buffer.length();
+      while (i > writtenFrom && isHeadingRunChar(self.buffer.charAt(i - 1))) {
+        run++;
+        i--;
+      }
+      self.headingHashRun = run == written ? self.headingHashRun + run : run;
     }
 
     finishTextNode(self, text, containsWhitespace, depth, index);
@@ -4020,6 +4032,10 @@ final class OutputOps {
         finalizeBlockquote(self);
       }
       self.pendingRawHtmlBoundary = false;
+    }
+
+    if (tagId >= Consts.TAG_H1 && tagId <= Consts.TAG_H6) {
+      self.headingHashRun = 0;
     }
 
     if (tagId >= Consts.TAG_H1 && tagId <= Consts.TAG_H6 && self.depthMap[Consts.TAG_A] == 0) {

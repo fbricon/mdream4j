@@ -1907,8 +1907,7 @@ final class ParseOps {
 
   static int processHtml(ConvertState self, String chunk) {
     if (self.heldOutputExceeded) {
-      self.parseTextBuffer.setLength(0);
-      return chunk.length();
+      return dropAfterHeldOutputExceeded(self, self.parseTextBuffer, chunk.length());
     }
     self.rawtextEndTagPending = false;
     StringBuilder textBuffer = self.parseTextBuffer;
@@ -2392,6 +2391,131 @@ final class ParseOps {
     return Math.max(1, self.textRunNextFlush - Scan.utf8Length(textBuffer));
   }
 
+  /** Drop the rest of the input once held output has outgrown the cap. */
+  private static int dropAfterHeldOutputExceeded(
+      ConvertState self, StringBuilder textBuffer, int chunkLength) {
+    textBuffer.setLength(0);
+    self.pendingStart = null;
+    self.pendingTag = null;
+    self.discard = ConvertState.Discard.none();
+    return chunkLength;
+  }
+
+  /** Only a byte cap can be exceeded, so the uncapped case is one inlined test. */
+  private static void checkHeldOutput(ConvertState self) {
+    if (self.maxNodeBytesInt != 0) {
+      checkHeldOutputCapped(self);
+    }
+  }
+
+  private static void checkHeldOutputCapped(ConvertState self) {
+    if (!self.heldOutputExceeded && heldOutputExceedsCap(self)) {
+      self.heldOutputExceeded = true;
+      self.truncated = true;
+    }
+  }
+
+  /**
+   * Whether output held back behind an open construct has outgrown {@code maxNodeBytes}. Measured
+   * from the construct's structure, never from what a flush happened to release, so chunking cannot
+   * move where it fires.
+   */
+  private static boolean heldOutputExceedsCap(ConvertState self) {
+    int cap = self.maxNodeBytesInt;
+    // The counter only bounds the run from above: output that survives between
+    // two runs (`<br>`, an image) breaks it without resetting the count. Past the
+    // cap the buffer's actual run decides.
+    if (self.headingHashRun > cap && trailingHeadingRun(self) > cap) {
+      return true;
+    }
+    // A streaming `<br>` run is held as one copy and a count until content
+    // follows it, then expanded whole into the chunk that yields it.
+    if (self.heldBreakBytes > cap) {
+      return true;
+    }
+    int len = self.buffer.length();
+    if (len <= cap) {
+      return false;
+    }
+    int floor = len;
+    // A link holds while its text is blank, since its close may still drop it.
+    // Other link holds end within the link's URL length.
+    int bracketPos = Integer.MAX_VALUE;
+    if (self.link.open && (self.link.pinsOutput || self.link.emptyTextPending)) {
+      bracketPos = Math.min(bracketPos, self.link.bracketPos);
+    }
+    for (ConvertState.LinkOutputState parent : self.parentLinks) {
+      if (parent.open && (parent.pinsOutput || parent.emptyTextPending)) {
+        bracketPos = Math.min(bracketPos, parent.bracketPos);
+      }
+    }
+    if (bracketPos != Integer.MAX_VALUE) {
+      floor = Math.min(floor, bracketPos);
+    }
+    // A quote releases completed lines only, and none while a blocker is open.
+    if (!self.retainsWholeDocument() && !self.blockquotes.isEmpty()) {
+      int contentStart = self.blockquotes.get(0).contentStart;
+      if (len - contentStart > cap) {
+        Integer blocker = blockquoteFlushBlocker(self);
+        int reach = blocker != null ? blocker : currentLineStart(self);
+        floor = Math.min(floor, Math.max(contentStart, reach));
+      }
+    }
+    return len - floor > cap;
+  }
+
+  /** The earliest offset an open construct holds output back from, or {@code null}. */
+  private static Integer blockquoteFlushBlocker(ConvertState self) {
+    int best = Integer.MAX_VALUE;
+    if (self.depthMap[Consts.TAG_A] > 0) {
+      ConvertState.LinkOutputState outermost =
+          self.parentLinks.isEmpty() ? self.link : self.parentLinks.get(0);
+      best = Math.min(best, outermost.open ? outermost.bracketPos : 0);
+    }
+    if (!self.openMarkers.isEmpty()) {
+      best = Math.min(best, self.openMarkers.get(0).outputStart);
+    }
+    int tentative = OutputOps.firstTentativeCaptionStart(self);
+    if (tentative >= 0) {
+      best = Math.min(best, tentative);
+    }
+    if (self.codeFence != null) {
+      best = Math.min(best, self.codeFence.outputStart);
+    }
+    if (!self.codeSpans.isEmpty()) {
+      best = Math.min(best, self.codeSpans.get(0).outputStart);
+    }
+    if (self.emptyItemHazard) {
+      best = Math.min(best, self.emptyItemLineStart);
+    }
+    return best == Integer.MAX_VALUE ? null : best;
+  }
+
+  /** The buffer's trailing {@code #}/space/tab run, read no further than the cap allows. */
+  private static int trailingHeadingRun(ConvertState self) {
+    int cap = self.maxNodeBytesInt;
+    int run = 0;
+    int i = self.buffer.length();
+    while (i > 0 && run <= cap) {
+      char c = self.buffer.charAt(i - 1);
+      if (c != '#' && c != ' ' && c != '\t') {
+        break;
+      }
+      run++;
+      i--;
+    }
+    return run;
+  }
+
+  private static int currentLineStart(ConvertState self) {
+    for (int i = self.buffer.length() - 1; i >= 0; i--) {
+      if (self.buffer.charAt(i) == '\n') {
+        return i + 1;
+      }
+    }
+    return 0;
+  }
+
   private static boolean dropsRawText(ConvertState self) {
     if (!self.extractionTracked.isEmpty()) {
       return false;
@@ -2512,6 +2636,7 @@ final class ParseOps {
     if (self.emptyItemHazard) {
       OutputOps.settleItemMarker(self);
     }
+    checkHeldOutput(self);
   }
 
   static void finalizeState(ConvertState self, String leftover) {
