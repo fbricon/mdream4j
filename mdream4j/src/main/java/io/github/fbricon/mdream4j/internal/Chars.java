@@ -136,4 +136,38 @@ final class Chars {
     }
     return false;
   }
+
+  /** Whether {@code value} starts with {@code expected} at {@code start}. */
+  static boolean startsWith(CharSequence value, int start, CharSequence expected) {
+    return regionEquals(value, start, start + expected.length(), expected);
+  }
+
+  /** Whether {@code value[start, end)} equals {@code expected}. */
+  static boolean regionEquals(CharSequence value, int start, int end, CharSequence expected) {
+    if (start < 0 || end > value.length() || end - start != expected.length()) {
+      return false;
+    }
+    for (int i = start; i < end; i++) {
+      if (value.charAt(i) != expected.charAt(i - start)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** Compares two strings the way Rust compares UTF-8 bytes, which sorts by code point. */
+  static int compareCodePoints(String left, String right) {
+    int leftIndex = 0;
+    int rightIndex = 0;
+    while (leftIndex < left.length() && rightIndex < right.length()) {
+      int leftCode = left.codePointAt(leftIndex);
+      int rightCode = right.codePointAt(rightIndex);
+      if (leftCode != rightCode) {
+        return leftCode < rightCode ? -1 : 1;
+      }
+      leftIndex += Character.charCount(leftCode);
+      rightIndex += Character.charCount(rightCode);
+    }
+    return Integer.compare(left.length() - leftIndex, right.length() - rightIndex);
+  }
 }

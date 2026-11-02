@@ -7,7 +7,6 @@ package io.github.fbricon.mdream4j.internal;
 
 import io.github.fbricon.mdream4j.Clean;
 import io.github.fbricon.mdream4j.Filter;
-import io.github.fbricon.mdream4j.Frontmatter;
 import io.github.fbricon.mdream4j.Options;
 import io.github.fbricon.mdream4j.OutputFormat;
 import io.github.fbricon.mdream4j.Plugins;
@@ -155,8 +154,6 @@ final class ConvertState {
   final List<CodeSpanState> codeSpans = new ArrayList<>();
   CodeFenceState codeFence;
   final List<BlockquoteFrame> blockquotes = new ArrayList<>(4);
-  final StringBuilder blockquoteScratch = new StringBuilder();
-  final StringBuilder escapeScratch = new StringBuilder();
   int blockquoteLineScannedTo;
   int blockquoteLineEnd;
   final List<String> headingSlugs = new ArrayList<>();
@@ -225,7 +222,6 @@ final class ConvertState {
 
   static final int TYPICAL_NESTING_DEPTH = 32;
   static final int TEXT_RUN_FLUSH_THRESHOLD = 64 * 1024;
-  static final int TEXT_RUN_SPLIT_SCAN = 64;
 
   static final int NO_OVERRIDE = 255;
 
@@ -317,8 +313,9 @@ final class ConvertState {
           filterExcludeParsed.add(
               new ParsedSelectorEntry(selector, Selector.parseSelectorList(selector)));
         }
-        this.filterExcludeTagsPresent = !filterExcludeParsed.isEmpty();
-        this.filterExcludeTags = excludeTagTable(filterExcludeParsed);
+        Long excludeTagMask = excludeTagTable(filterExcludeParsed);
+        this.filterExcludeTagsPresent = excludeTagMask != null;
+        this.filterExcludeTags = excludeTagMask == null ? 0L : excludeTagMask;
         this.filterProcessChildren = filter.processChildren();
       }
       if (plugins.extraction() != null) {
@@ -526,22 +523,28 @@ final class ConvertState {
     return (int) Math.min(number, MAX_ORDERED_START);
   }
 
-  private static long excludeTagTable(List<ParsedSelectorEntry> selectors) {
+  /**
+   * Every bare tag selector as a bitmask, or {@code null} when one is not a tag name.
+   *
+   * <p>The caller may then skip selector matching for built-in tags. An unknown bare tag name
+   * still counts as a tag selector (it can only match a custom element), so it only leaves its bit
+   * clear. Tag ids beyond the mask force the general path rather than truncating it.
+   */
+  private static Long excludeTagTable(List<ParsedSelectorEntry> selectors) {
     long table = 0L;
     for (ParsedSelectorEntry entry : selectors) {
       ParsedSelector parsed = entry.parsed;
       if (parsed.kind != ParsedSelector.Kind.TAG) {
-        return 0L;
+        return null;
       }
       Integer id = Consts.get_tag_id(parsed.text);
       if (id == null) {
-        return 0L;
+        continue;
       }
-      if (id < 64) {
-        table |= 1L << id;
-      } else {
-        return 0L;
+      if (id >= 64) {
+        return null;
       }
+      table |= 1L << id;
     }
     return table;
   }

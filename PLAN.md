@@ -284,6 +284,14 @@ The conformance corpus is library-owned. Add a small **consumer-shaped** suite (
 `<html>`, Javadoc-style tables, `file:` links, sloppy markup, concurrent calls) that exercises the
 guarantees in §8.2. Consumer migration is tracked separately in `docs/CONSUMERS.md`.
 
+### 6.6 Deferred fast paths
+
+The upstream text fast path (`parse.rs::text_node_fast_path_ok` /
+`process_plain_text_node` and `output.rs::emit_plain_text_inline`) is a performance
+specialisation that bypasses the general text emitter. The port always takes
+`processTextBufferPiece` for now. Port and wire it during the benchmark milestone,
+with differential tests proving identical output.
+
 ---
 
 ## 7. Benchmark plan

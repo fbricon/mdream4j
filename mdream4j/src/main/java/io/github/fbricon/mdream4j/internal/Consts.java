@@ -449,20 +449,6 @@ public final class Consts {
   public static final int[] LIST_ITEM_SPACING = {1, 0};
   public static final int[] TABLE_ROW_SPACING = {0, 1};
 
-  public static final int LT_CHAR = 60; // '<'
-  public static final int GT_CHAR = 62; // '>'
-  public static final int SLASH_CHAR = 47; // '/'
-  public static final int EQUALS_CHAR = 61; // '='
-  public static final int QUOTE_CHAR = 34; // '"'
-  public static final int APOS_CHAR = 39; // '\''
-  public static final int EXCLAMATION_CHAR = 33; // '!'
-  public static final int QUESTION_CHAR = 63; // '?'
-  public static final int AMPERSAND_CHAR = 38; // '&'
-  public static final int DASH_CHAR = 45; // '-'
-  public static final int SPACE_CHAR = 32; // ' '
-  public static final int NEWLINE_CHAR = 10; // '\n'
-  public static final int CARRIAGE_RETURN_CHAR = 13; // '\r'
-
   /**
    * Longest built-in HTML tag name ({@code blockquote}, {@code figcaption}); also the size of the
    * stack buffer used for the case-insensitive lookup. Private in Rust, public here so the porter

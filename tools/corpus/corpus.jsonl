@@ -171,3 +171,68 @@
 {"id":"cap-raw","html":"<div><span>rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</span><span>rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</span><span>rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</span><span>rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</span><span>rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</span><span>rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</span><span>rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</span><span>rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</span><span>rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</span><span>rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</span></div>","options":{"maxNodeBytes":32}}
 {"id":"cap-entity","html":"<p>&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;</p>","options":{"maxNodeBytes":10}}
 {"id":"cap-select","html":"<select><option>oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo</option></select>","options":{"maxNodeBytes":20}}
+{"id":"clean-urls","html":"<a href=\"https://x.io/a?utm_source=n&amp;utm_medium=e&amp;id=1\">text</a>","options":{"clean":{"urls":true}}}
+{"id":"clean-empty-links","html":"<p><a href=\"javascript:alert(1)\">js</a> <a href=\"#\">hash</a> <a href=\"/ok\">ok</a></p>","options":{"clean":{"emptyLinks":true}}}
+{"id":"clean-redundant-links","html":"<p><a href=\"https://example.com\">https://example.com</a> and <a href=\"/x\">text</a></p>","options":{"clean":{"redundantLinks":true}}}
+{"id":"clean-self-link-headings","html":"<h2><a href=\"#section\">Section</a></h2><p><a href=\"#other\">Other</a></p>","options":{"clean":{"selfLinkHeadings":true}}}
+{"id":"clean-empty-images","html":"<p><img src=\"/a.png\" alt=\"\"> <img src=\"/b.png\" alt=\"B\"></p>","options":{"clean":{"emptyImages":true}}}
+{"id":"clean-empty-link-text","html":"<p><a href=\"/x\"><svg></svg></a> tail</p>","options":{"clean":{"emptyLinkText":true}}}
+{"id":"clean-fragments","html":"<h2 id=\"s\">Section</h2><p><a href=\"#s\">ok</a> <a href=\"#nope\">broken</a></p>","options":{"clean":{"fragments":true}}}
+{"id":"clean-all","html":"<p><a href=\"https://x.io/?utm_source=a\">https://x.io/</a></p><h2><a href=\"#t\">T</a></h2><img alt=\"\" src=\"/i\">","options":{"clean":{"urls":true,"emptyLinks":true,"redundantLinks":true,"selfLinkHeadings":true,"emptyImages":true,"emptyLinkText":true}}}
+{"id":"clean-fragments-title","html":"<h2 id=\"s\">Section</h2><p><a href=\"#s\" title=\"Tip\">ok</a> <a href=\"#nope\" title=\"Tip\">broken</a></p>","options":{"clean":{"fragments":true}}}
+{"id":"clean-fragments-markup","html":"<h2>Hello <code>world</code></h2><p><a href=\"#hello-world\">ok</a> <a href=\"#nope\">bad</a></p>","options":{"clean":{"fragments":true}}}
+{"id":"clean-fragments-unicode","html":"<h2 id=\"u\">Überblick</h2><p><a href=\"#%C3%BCberblick\">encoded</a> <a href=\"#überblick\">raw</a></p>","options":{"clean":{"fragments":true}}}
+{"id":"clean-fragments-nested-markers","html":"<h2 id=\"a\">A</h2><p><a href=\"#a\">ok <em>still</em></a> <a href=\"#missing\">bad <strong>gone</strong></a></p>","options":{"clean":{"fragments":true}}}
+{"id":"clean-fragments-self-links","html":"<h2 id=\"t\"><a href=\"#t\">T</a></h2><p><a href=\"#t\">ok</a> <a href=\"#x\">nope</a></p>","options":{"clean":{"fragments":true,"selfLinkHeadings":true}}}
+{"id":"clean-empty-link-text-title","html":"<p><a href=\"/x\" title=\"T\"></a> tail</p>","options":{"clean":{"emptyLinkText":true}}}
+{"id":"clean-redundant-links-title","html":"<p><a href=\"https://example.com\" title=\"Example\">https://example.com</a></p>","options":{"clean":{"redundantLinks":true}}}
+{"id":"origin-links","html":"<a href=\"/a\">A</a><img src=\"i.png\" alt=\"I\">","options":{"origin":"https://example.com/docs/"}}
+{"id":"origin-redundant-links","html":"<a href=\"/docs/a\">https://example.com/docs/a</a>","options":{"origin":"https://example.com/docs/","clean":{"redundantLinks":true}}}
+{"id":"autolink-default","html":"<p>Visit <a href=\"https://x.io\">https://x.io</a> today.</p>","options":{}}
+{"id":"autolink-with-title","html":"<p><a href=\"https://x.io\" title=\"X\">https://x.io</a></p>","options":{}}
+{"id":"autolink-mailto","html":"<p><a href=\"mailto:a@b.c\">mailto:a@b.c</a></p>","options":{}}
+{"id":"autolink-ftp","html":"<p><a href=\"ftp://x.io/f\">ftp://x.io/f</a></p>","options":{}}
+{"id":"autolink-not-a-uri","html":"<p><a href=\"/x\">/x</a> <a href=\"#top\">#top</a></p>","options":{}}
+{"id":"autolink-query","html":"<p><a href=\"https://x.io/a?b=1&amp;c=2\">https://x.io/a?b=1&amp;c=2</a></p>","options":{}}
+{"id":"autolink-trailing-space","html":"<p><a href=\"https://x.io\">https://x.io </a>end</p>","options":{}}
+{"id":"autolink-nested-marker","html":"<p><a href=\"https://x.io\"><em>https://x.io</em></a></p>","options":{}}
+{"id":"filter-exclude-tags","html":"<div>keep</div><aside>drop</aside><nav>drop</nav><p>keep2</p>","options":{"plugins":{"filter":{"exclude":["aside","nav"]}}}}
+{"id":"filter-include-tags","html":"<div>no</div><h1>Yes</h1><p>Yes2</p><aside>no2</aside>","options":{"plugins":{"filter":{"include":["h1","p"]}}}}
+{"id":"filter-include-list","html":"<h1>Included</h1><p>secret</p>","options":{"plugins":{"filter":{"include":["h1, h2"]}}}}
+{"id":"filter-selectors","html":"<p class=\"hide\">a</p><p id=\"keep\">b</p><div data-x=\"1\">c</div>","options":{"plugins":{"filter":{"exclude":[".hide","#keep"]}}}}
+{"id":"filter-list-child","html":"<ul><li>a</li><div class=\"hide\">hidden</div><li>b</li></ul>","options":{"plugins":{"filter":{"exclude":[".hide"]}}}}
+{"id":"filter-process-children","html":"<div class=\"hide\"><p>child</p></div><p>after</p>","options":{"plugins":{"filter":{"exclude":[".hide"],"processChildren":true}}}}
+{"id":"isolate-main-explicit","html":"<body><nav>Navigation</nav><h1>Outside</h1><main><h1>Article</h1><p>Body</p><h2>Sub</h2><p>More</p></main><footer>Footer</footer></body>","options":{"plugins":{"isolateMain":true}}}
+{"id":"isolate-main-heuristic","html":"<body><header>Site header</header><h1>Article</h1><p>Body</p><footer>Site footer</footer></body>","options":{"plugins":{"isolateMain":true}}}
+{"id":"isolate-main-none","html":"<p>first</p><p>second</p>","options":{"plugins":{"isolateMain":true}}}
+{"id":"frontmatter-basic","html":"<html><head><title>Test Page Title</title><meta name=\"description\" content=\"A test page\"></head><body><h1>Main Content</h1><p>Text</p></body></html>","options":{"plugins":{"frontmatter":{}}}}
+{"id":"frontmatter-additional","html":"<html><head><title>Test Page</title></head><body><p>Content</p></body></html>","options":{"plugins":{"frontmatter":{"additionalFields":{"layout":"post","date":"2025-05-10"}}}}}
+{"id":"frontmatter-meta-fields","html":"<html><head><title>T</title><meta name=\"author\" content=\"John Doe\"><meta name=\"keywords\" content=\"key1, key2\"></head><body><p>Content</p></body></html>","options":{"plugins":{"frontmatter":{"metaFields":["author","keywords"]}}}}
+{"id":"frontmatter-og","html":"<html><head><title>Page Title</title><meta property=\"og:title\" content=\"OG Title\"><meta name=\"twitter:description\" content=\"Twitter Description\"></head><body><p>Content</p></body></html>","options":{"plugins":{"frontmatter":{}}}}
+{"id":"frontmatter-no-head","html":"<p>body only</p>","options":{"plugins":{"frontmatter":{}}}}
+{"id":"tailwind-bold","html":"<p class=\"font-bold\">This is bold text</p>","options":{"plugins":{"tailwind":true}}}
+{"id":"tailwind-italic","html":"<p class=\"italic\">This is italic text</p>","options":{"plugins":{"tailwind":true}}}
+{"id":"tailwind-combined","html":"<p class=\"font-bold italic\">This is bold and italic</p>","options":{"plugins":{"tailwind":true}}}
+{"id":"tailwind-nested","html":"<div><p>Regular text with <span class=\"font-bold\">bold</span> word</p><p class=\"italic\">Italic paragraph</p></div>","options":{"plugins":{"tailwind":true}}}
+{"id":"tailwind-absolute","html":"<p>Regular content</p><p class=\"absolute\">Hidden</p><p>More regular content</p>","options":{"plugins":{"tailwind":true}}}
+{"id":"tailwind-breakpoints","html":"<p class=\"italic font-bold md:font-normal lg:font-bold\">Multiple classes</p>","options":{"plugins":{"tailwind":true}}}
+{"id":"tailwind-underline-link","html":"<a class=\"underline\" href=\"https://example.com/source\">Source</a>","options":{"plugins":{"tailwind":true}}}
+{"id":"override-strong","html":"<p><strong>bold</strong></p>","options":{"plugins":{"tagOverrides":{"strong":{"enter":"__","exit":"__"}}}}}
+{"id":"override-alias","html":"<p><x-heading>content</x-heading></p>","options":{"plugins":{"tagOverrides":{"x-heading":{"alias":"h2"}}}}}
+{"id":"override-spacing","html":"<div>first</div><div>second</div>","options":{"plugins":{"tagOverrides":{"div":{"spacing":[1,1]}}}}}
+{"id":"override-inline","html":"<p>before <span>middle</span> after</p>","options":{"plugins":{"tagOverrides":{"span":{"isInline":false,"spacing":[2,2]}}}}}
+{"id":"override-custom","html":"<p><x-note>important</x-note></p>","options":{"plugins":{"tagOverrides":{"x-note":{"enter":"> **Note:** ","exit":"","isInline":true,"spacing":[0,0],"collapsesInnerWhiteSpace":true}}}}}
+{"id":"override-inline-unset","html":"<p><em>a </em><x-y>2</x-y>z</p>","options":{"plugins":{"tagOverrides":{"x-y":{"enter":"**","exit":"**"}}}}}
+{"id":"override-sup-sub","html":"<p>E = mc<sup>2</sup> and H<sub>2</sub>O</p>","options":{"plugins":{"tagOverrides":{"sup":{"enter":"^","exit":"^"},"sub":{"enter":"~","exit":"~"}}}}}
+{"id":"override-cdata","html":"<p>a<![CDATA[x]]>b</p>","options":{"plugins":{"tagOverrides":{"#cdata-section":{"enter":"[","exit":"]","spacing":[0,0],"isInline":true}}}}}
+{"id":"override-cdata-alias","html":"<p>a<![CDATA[x]]>b</p>","options":{"plugins":{"tagOverrides":{"#cdata-section":{"alias":"em"}}}}}
+{"id":"cdata-default","html":"<p>a<![CDATA[x]]>b</p>","options":{}}
+{"id":"cdata-unterminated","html":"<p>a<![CDATA[x</p>","options":{}}
+{"id":"cdata-unterminated-override","html":"<p>a<![CDATA[x</p>","options":{"plugins":{"tagOverrides":{"#cdata-section":{"enter":"[","exit":"]","spacing":[0,0],"isInline":true}}}}}
+{"id":"override-anchor-enter","html":"<details><a href=\"/x\">a[b]</a></details>","options":{"plugins":{"tagOverrides":{"a":{"enter":"["}}}}}
+{"id":"extract-headings","html":"<h1>One</h1><p>x</p><h2>Two</h2>","options":{"plugins":{"extraction":{"selectors":["h1","h2"]}}}}
+{"id":"extract-attr","html":"<a href=\"/a\" title=\"T\">A</a><a href=\"/b\">B</a>","options":{"plugins":{"extraction":{"selectors":["a[href]"]}}}}
+{"id":"extract-nested","html":"<div class=\"c\"><p>inner <b>bold</b></p></div>","options":{"plugins":{"extraction":{"selectors":["div.c"]}}}}
+{"id":"extract-list","html":"<ul><li>a</li><li>b</li></ul>","options":{"plugins":{"extraction":{"selectors":["li"]}}}}
+{"id":"extract-multi","html":"<h2 id=\"s\">S</h2><img src=\"/i\" alt=\"I\">","options":{"plugins":{"extraction":{"selectors":["h2","img"]}}}}
+{"id":"combo-options","html":"<html><head><title>Page</title><meta name=\"description\" content=\"About\"></head><body><nav>Menu</nav><main><h1>Hello</h1><form>Sign up</form><p class=\"font-bold\">Bold</p><a href=\"/a\">A</a><x-note>Note</x-note></main><footer>Footer</footer></body></html>","options":{"origin":"https://example.com","clean":{"urls":true},"plugins":{"frontmatter":{},"isolateMain":true,"tailwind":true,"tagOverrides":{"x-note":{"alias":"strong"}},"filter":{"exclude":["form"]},"extraction":{"selectors":["a[href]","x-note"]}}}}

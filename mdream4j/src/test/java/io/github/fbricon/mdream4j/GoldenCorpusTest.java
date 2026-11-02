@@ -13,8 +13,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -27,20 +29,23 @@ import org.junit.jupiter.api.Test;
 class GoldenCorpusTest {
 
   /** Parity floors, raised as the port converges. */
-  private static final int MARKDOWN_FLOOR = 173;
-  private static final int TEXT_FLOOR = 173;
-  private static final int HTML_FLOOR = 17;
+  private static final int MARKDOWN_FLOOR = 238;
+  private static final int TEXT_FLOOR = 238;
+  private static final int HTML_FLOOR = 238;
+  private static final int METADATA_FLOOR = 238;
 
   @Test
   void matchesReferenceCorpus() throws IOException {
     List<Map<String, Object>> cases = Corpus.loadCases();
-    assertTrue(cases.size() >= 173, "corpus must not shrink: " + cases.size());
+    assertTrue(cases.size() >= 238, "corpus must not shrink: " + cases.size());
 
     int markdownPass = 0;
     int textPass = 0;
     int htmlPass = 0;
+    int metadataPass = 0;
     StringBuilder report = new StringBuilder();
     List<String> markdownDiffs = new ArrayList<>();
+    List<String> metadataDiffs = new ArrayList<>();
 
     for (Map<String, Object> corpusCase : cases) {
       String id = (String) corpusCase.get("id");
@@ -57,6 +62,21 @@ class GoldenCorpusTest {
         markdownPass++;
       } else if (markdownDiffs.size() < 40) {
         markdownDiffs.add(diff(id, expectedMarkdown, markdown.markdown()));
+      }
+
+      if (metadataMatches(markdown, outputs)) {
+        metadataPass++;
+      } else if (metadataDiffs.size() < 40) {
+        metadataDiffs.add(
+            id
+                + "\n  expected frontmatter: "
+                + expectedPairs(outputs.get("frontmatter"))
+                + "\n  actual frontmatter:   "
+                + actualFrontmatter(markdown.frontmatter())
+                + "\n  expected extracted:   "
+                + expectedExtracted(outputs.get("extracted"))
+                + "\n  actual extracted:     "
+                + actualExtracted(markdown.extracted()));
       }
 
       String text =
@@ -78,8 +98,12 @@ class GoldenCorpusTest {
     report.append("markdown: ").append(markdownPass).append('/').append(total).append('\n');
     report.append("text: ").append(textPass).append('/').append(total).append('\n');
     report.append("html: ").append(htmlPass).append('/').append(total).append('\n');
+    report.append("metadata: ").append(metadataPass).append('/').append(total).append('\n');
     report.append('\n');
     for (String diff : markdownDiffs) {
+      report.append(diff).append('\n');
+    }
+    for (String diff : metadataDiffs) {
       report.append(diff).append('\n');
     }
     Path reportPath = Paths.get("target", "golden-report.txt");
@@ -89,6 +113,79 @@ class GoldenCorpusTest {
     assertTrue(markdownPass >= MARKDOWN_FLOOR, "markdown parity: " + markdownPass + "/" + total);
     assertTrue(textPass >= TEXT_FLOOR, "text parity: " + textPass + "/" + total);
     assertTrue(htmlPass >= HTML_FLOOR, "html parity: " + htmlPass + "/" + total);
+    assertTrue(metadataPass >= METADATA_FLOOR, "metadata parity: " + metadataPass + "/" + total);
+  }
+
+  private static boolean metadataMatches(MdreamResult result, Map<String, Object> outputs) {
+    return Objects.equals(
+            expectedPairs(outputs.get("frontmatter")), actualFrontmatter(result.frontmatter()))
+        && Objects.equals(
+            expectedExtracted(outputs.get("extracted")), actualExtracted(result.extracted()));
+  }
+
+  /** The recorded {@code [key, value]} pairs, or {@code null} when the plugin was off. */
+  private static List<List<String>> expectedPairs(Object value) {
+    if (value == null) {
+      return null;
+    }
+    List<List<String>> pairs = new ArrayList<>();
+    for (Object item : (List<?>) value) {
+      List<?> pair = (List<?>) item;
+      pairs.add(Arrays.asList((String) pair.get(0), (String) pair.get(1)));
+    }
+    return pairs;
+  }
+
+  private static List<List<String>> actualFrontmatter(Map<String, String> entries) {
+    if (entries == null) {
+      return null;
+    }
+    List<List<String>> pairs = new ArrayList<>();
+    for (Map.Entry<String, String> entry : entries.entrySet()) {
+      pairs.add(Arrays.asList(entry.getKey(), entry.getValue()));
+    }
+    return pairs;
+  }
+
+  private static List<String> expectedExtracted(Object value) {
+    if (value == null) {
+      return null;
+    }
+    List<String> elements = new ArrayList<>();
+    for (Object item : (List<?>) value) {
+      Map<?, ?> element = (Map<?, ?>) item;
+      elements.add(
+          element.get("selector")
+              + "|"
+              + element.get("tagName")
+              + "|"
+              + element.get("textContent")
+              + "|"
+              + element.get("attributes"));
+    }
+    return elements;
+  }
+
+  private static List<String> actualExtracted(List<ExtractedElement> extracted) {
+    if (extracted == null) {
+      return null;
+    }
+    List<String> elements = new ArrayList<>();
+    for (ExtractedElement element : extracted) {
+      List<List<String>> attributes = new ArrayList<>();
+      for (Map.Entry<String, String> attribute : element.attributes().entrySet()) {
+        attributes.add(Arrays.asList(attribute.getKey(), attribute.getValue()));
+      }
+      elements.add(
+          element.selector()
+              + "|"
+              + element.tagName()
+              + "|"
+              + element.textContent()
+              + "|"
+              + attributes);
+    }
+    return elements;
   }
 
   private static String diff(String id, String expected, String actual) {

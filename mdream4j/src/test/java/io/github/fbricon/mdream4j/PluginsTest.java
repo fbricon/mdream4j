@@ -31,7 +31,7 @@ class PluginsTest {
     Filter filter = Filter.exclude("nav", "footer");
     assertEquals(2, filter.exclude().size());
     assertTrue(filter.include().isEmpty());
-    assertFalse(filter.processChildren());
+    assertTrue(filter.processChildren());
 
     Plugins plugins = Plugins.builder().filter(filter).build();
     assertEquals(filter, plugins.filter());

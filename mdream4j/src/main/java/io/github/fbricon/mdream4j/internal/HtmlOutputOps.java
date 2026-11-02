@@ -5,10 +5,6 @@
  */
 package io.github.fbricon.mdream4j.internal;
 
-import io.github.fbricon.mdream4j.Clean;
-import io.github.fbricon.mdream4j.Frontmatter;
-import io.github.fbricon.mdream4j.Plugins;
-import io.github.fbricon.mdream4j.TagOverride;
 
 /**
  * HTML output mode. Mirrors {@code convert/html_output.rs}.

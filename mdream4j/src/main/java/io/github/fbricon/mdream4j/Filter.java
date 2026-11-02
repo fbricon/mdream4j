@@ -6,7 +6,6 @@
 package io.github.fbricon.mdream4j;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -55,7 +54,12 @@ public final class Filter {
     return exclude;
   }
 
-  /** Whether children of an excluded element are still processed. */
+  /**
+   * Whether an included element's subtree is kept; defaults to {@code true}.
+   *
+   * <p>With {@code false}, only elements that match an {@code include} selector themselves are
+   * kept, even inside a matching ancestor.
+   */
   public boolean processChildren() {
     return processChildren;
   }
@@ -90,7 +94,7 @@ public final class Filter {
 
     private final List<String> include = new ArrayList<>();
     private final List<String> exclude = new ArrayList<>();
-    private boolean processChildren;
+    private boolean processChildren = true;
 
     private Builder() {}
 

@@ -212,13 +212,48 @@ pub struct Converted {
 
 impl Converted {
   /// Serialises the result for `golden/*.jsonl`.
+  ///
+  /// Frontmatter and extraction are recorded only when the plugin ran, so a case that does not
+  /// request them keeps the exact same shape it had before the plugins were covered.
   pub fn to_json(&self) -> Value {
-    serde_json::json!({
-      "markdown": self.markdown.markdown,
+    let result = &self.markdown;
+    let mut outputs = serde_json::json!({
+      "markdown": result.markdown,
       "text": self.text.markdown,
       "html": self.html.markdown,
-      "truncated": self.markdown.truncated,
-    })
+      "truncated": result.truncated,
+    });
+    let map = outputs.as_object_mut().expect("outputs is an object");
+    if let Some(frontmatter) = &result.frontmatter {
+      map.insert(
+        "frontmatter".to_string(),
+        Value::Array(
+          frontmatter
+            .iter()
+            .map(|(key, value)| serde_json::json!([key, value]))
+            .collect(),
+        ),
+      );
+    }
+    if let Some(extracted) = &result.extracted {
+      map.insert(
+        "extracted".to_string(),
+        Value::Array(
+          extracted
+            .iter()
+            .map(|element| {
+              serde_json::json!({
+                "selector": element.selector,
+                "tagName": element.tag_name,
+                "textContent": element.text_content,
+                "attributes": element.attributes,
+              })
+            })
+            .collect(),
+        ),
+      );
+    }
+    outputs
   }
 }
 

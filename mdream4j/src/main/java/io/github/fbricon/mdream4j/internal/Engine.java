@@ -88,7 +88,11 @@ public final class Engine {
     Plugins plugins = state.options.plugins();
     Frontmatter config = plugins == null ? null : plugins.frontmatter();
     if (config != null) {
-      for (Map.Entry<String, String> field : config.additionalFields().entrySet()) {
+      // The upstream config holds a BTreeMap, so extra fields come out key-sorted.
+      List<Map.Entry<String, String>> fields =
+          new ArrayList<>(config.additionalFields().entrySet());
+      ParseOps.sortFieldsByKey(fields, Map.Entry::getKey);
+      for (Map.Entry<String, String> field : fields) {
         String key = field.getKey();
         if (!"title".equals(key) && !"description".equals(key)) {
           entries.put(key, field.getValue());

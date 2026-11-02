@@ -6,6 +6,8 @@
 package io.github.fbricon.mdream4j.internal;
 
 import io.github.fbricon.mdream4j.TagOverride;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -22,7 +24,6 @@ final class OutputOps {
 
   // === Constants ===
 
-  private static final int STREAMING_FLUSH_THRESHOLD = 8 * 1024;
   private static final int ESCAPE_HEADROOM = 8;
 
   private static final int DESTINATION_ESCAPE_BIT = 1;
@@ -37,7 +38,6 @@ final class OutputOps {
   private static final boolean[] SIMPLE_EMIT_TAG = buildSimpleEmitTag();
 
   private static final int MAX_BORROWED_INDENT = 62;
-  private static final String UNORDERED_MARKER = "- ";
   private static final int ORDERED_MARKER_CAPACITY = 6;
 
   // === Small helpers ===
@@ -65,7 +65,7 @@ final class OutputOps {
 
   private static boolean[] buildSimpleEmitTag() {
     boolean[] table = new boolean[Consts.MAX_TAG_ID];
-    java.util.Arrays.fill(table, true);
+    Arrays.fill(table, true);
     int[] excluded = {
       Consts.TAG_A,
       Consts.TAG_LI,
@@ -274,18 +274,6 @@ final class OutputOps {
         && self.depthMap[Consts.TAG_PRE] == 0;
   }
 
-  static boolean textFastPathOk(ConvertState self) {
-    return self.isMarkdown()
-        && self.maxNodeBytes == 0
-        && self.wrapWidth == 0
-        && !self.listRulePending
-        && !self.pendingInlineWhitespace
-        && !self.pendingRawHtmlBoundary
-        && !self.preFencePending
-        && self.depthMap[Consts.TAG_PRE] == 0
-        && self.depthMap[Consts.TAG_CODE] == 0;
-  }
-
   // === Buffer primitives ===
 
   private static int lastOutputByte(ConvertState self) {
@@ -349,6 +337,19 @@ final class OutputOps {
 
   static void truncateBuffer(ConvertState self, int len) {
     self.buffer.setLength(Math.min(len, self.buffer.length()));
+  }
+
+  /**
+   * Prepends the generated frontmatter to the Markdown output.
+   *
+   * <p>Mirrors {@code emit_frontmatter}: no open code span exists when the head closes, so the
+   * content lands in the buffer untruncated and becomes the new trailing-content length.
+   */
+  static void emitFrontmatter(ConvertState self, String content) {
+    if (self.isMarkdown() && !content.isEmpty()) {
+      self.buffer.append(content);
+      self.lastContentCacheLen = content.length();
+    }
   }
 
   private static void trimTrailingSpaces(ConvertState self) {
@@ -875,35 +876,6 @@ final class OutputOps {
     self.textBufferHasInlineGfmHazard |= hazard;
     emitTextWithGeneratedMarkdown(
         self, text, containsWhitespace, depth, index, null, null);
-  }
-
-  static void emitPlainTextInline(
-      ConvertState self, String text, boolean containsWhitespace, int depth, int index) {
-    boolean hasInlineGfmHazard = self.textBufferHasInlineGfmHazard;
-    self.textBufferHasInlineGfmHazard = false;
-    if (text.isEmpty()) {
-      return;
-    }
-    if (self.inTableCell() && self.tableCurrentRowCells >= self.tableColumnCap) {
-      self.truncated = true;
-      return;
-    }
-    int lastChar = lastOutputByte(self);
-    if (collapsesIntoSpace(text, lastChar)) {
-      return;
-    }
-    boolean inTable = self.depthMap[Consts.TAG_TABLE] > 0;
-    boolean inLink = self.depthMap[Consts.TAG_A] > 0;
-    boolean inQuote = self.depthMap[Consts.TAG_BLOCKQUOTE] > 0;
-    boolean hazard =
-        hasInlineGfmHazard
-            || contextGfmHazard(text, inTable, inLink, inQuote)
-            || startsWithGfmBlockCandidate(self, text);
-    String escaped = hazard ? escapeGfmTextInto(self, text) : null;
-    String out = escaped == null ? text : escaped;
-    boolean addSpace = shouldAddSpacingBeforeText(self, lastChar, out);
-    pushTextUncapped(self, out, addSpace);
-    finishTextNode(self, out, containsWhitespace, depth, index);
   }
 
   static void emitTextWithGeneratedMarkdown(
@@ -2634,10 +2606,6 @@ final class OutputOps {
     self.captionBoundaryNewLines = newLines;
   }
 
-  static void clearCaptionBoundary(ConvertState self) {
-    self.captionBoundary = ConvertState.CAPTION_BOUNDARY_NONE;
-  }
-
   private static void deferCaptionBreak(ConvertState self, String fragment) {
     if (self.captionFrames.isEmpty()) {
       return;
@@ -2829,6 +2797,131 @@ final class OutputOps {
     }
   }
 
+  /**
+   * Clean-mode rewrite of a closing link; {@code true} when it handled the exit.
+   *
+   * <p>Mirrors {@code try_link_clean_rewrite}: an empty link is dropped whole, a self-link in a
+   * heading or a link whose text is its own URL keeps only its text.
+   */
+  private static boolean tryLinkCleanRewrite(
+      ConvertState self, ElementNode node, boolean isInline) {
+    if (self.link.skipped) {
+      endLink(self);
+      self.lastNodeIsInline = isInline;
+      return true;
+    }
+    // Rewrites need the `[` this anchor wrote. Without one, only the plain close remains.
+    int bracketPos = -1;
+    if (!self.plainText
+        && self.cleanFlags != 0
+        && !self.link.rawHtmlOpen
+        && !self.link.holdReleased
+        && self.link.bracketEmitted) {
+      int found = self.buffer.indexOf("[", self.link.bracketPos);
+      if (found >= 0) {
+        bracketPos = found;
+      }
+    }
+    if (bracketPos < 0) {
+      return false;
+    }
+    int textStart = bracketPos + 1;
+    int bufLen = self.buffer.length();
+    String linkText = textStart <= bufLen ? self.buffer.substring(textStart) : "";
+    int textLen = Math.max(0, bufLen - textStart);
+
+    if ((self.cleanFlags & ConvertState.CLEAN_EMPTY_LINK_TEXT) != 0
+        && Chars.trimUnicode(linkText).isEmpty()) {
+      dropEmptyLinkText(self, bracketPos, isInline);
+      return true;
+    }
+
+    String href = node.attributes.getBit(Consts.ATTR_HREF);
+    if ((self.cleanFlags & ConvertState.CLEAN_SELF_LINK_HEADINGS) != 0
+        && self.inHeading()
+        && href != null
+        && href.startsWith("#")
+        && textLen > 0) {
+      keepLinkText(self, bracketPos, textLen, isInline);
+      return true;
+    }
+
+    if ((self.cleanFlags & ConvertState.CLEAN_REDUNDANT_LINKS) != 0 && href != null) {
+      String resolved = Url.resolveUrl(href, self.origin, self.cleanUrls);
+      if (linkText.equals(resolved) && textLen > 0) {
+        keepLinkText(self, bracketPos, textLen, isInline);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Clean-mode empty link: drop the whole {@code [](url)}. */
+  private static void dropEmptyLinkText(ConvertState self, int bracketPos, boolean isInline) {
+    truncateBuffer(self, bracketPos);
+    if (self.link.startsAtHardBreak) {
+      self.hardBreakEnd = self.link.bracketPos;
+    }
+    resetEmptyTentativeCaptionFrames(self);
+    endLink(self);
+    self.lastNodeIsInline = isInline;
+  }
+
+  /** Clean-mode link reduced to its text: drop the {@code [}, keeping the text. */
+  private static void keepLinkText(ConvertState self, int bracketPos, int textLen, boolean isInline) {
+    noteBufferRewrite(self, bracketPos);
+    self.buffer.deleteCharAt(bracketPos);
+    self.lastContentCacheLen = textLen;
+    endLink(self);
+    self.lastNodeIsInline = isInline;
+  }
+
+  /**
+   * Writes {@code <uri>} for an autolink whose text is its own URL. {@code true} when it wrote the
+   * exit.
+   */
+  private static boolean tryAutolinkRewrite(ConvertState self, String resolved, boolean isInline) {
+    if (!Url.isAutolinkUri(resolved) || self.link.holdReleased) {
+      return false;
+    }
+    int bracketPos = self.link.bracketPos;
+    if (bracketPos >= self.buffer.length()
+        || self.buffer.charAt(bracketPos) != '['
+        || !self.buffer.substring(bracketPos + 1).equals(resolved)) {
+      return false;
+    }
+    truncateBuffer(self, bracketPos);
+    self.buffer.append('<').append(resolved).append('>');
+    self.lastContentCacheLen = self.buffer.length() - bracketPos;
+    endLink(self);
+    self.lastNodeIsInline = isInline;
+    return true;
+  }
+
+  /** Remember a same-document link so the fragment pass can remap it. */
+  private static void recordFragmentLink(
+      ConvertState self, String fragment, boolean hasTitle, int textEnd) {
+    self.fragmentLinks.add(
+        new ConvertState.FragmentLink(
+            self.link.bracketPos, textEnd, self.buffer.length(), fragment, hasTitle));
+  }
+
+  /**
+   * Invalidate the measured state a rewrite at {@code offset} can reach.
+   *
+   * <p>The port keeps no held-run caches, so only the hard-break and blockquote-line offsets
+   * remain to reset.
+   */
+  private static void noteBufferRewrite(ConvertState self, int offset) {
+    if (offset < self.blockquoteLineScannedTo) {
+      self.blockquoteLineScannedTo = 0;
+      self.blockquoteLineEnd = 0;
+    }
+    if (self.hardBreakEnd >= 0 && offset < self.hardBreakEnd) {
+      self.hardBreakEnd = -1;
+    }
+  }
+
   private static void writeLinkExit(
       ConvertState self, ElementNode node, boolean isInline, int newLines) {
     if (!self.link.open) {
@@ -2837,6 +2930,10 @@ final class OutputOps {
     if (self.link.skipped) {
       endLink(self);
       self.lastNodeIsInline = isInline;
+      return;
+    }
+    self.link.emptyTextPending = false;
+    if (self.cleanFlags != 0 && tryLinkCleanRewrite(self, node, isInline)) {
       return;
     }
     String href = node.attributes.getBit(Consts.ATTR_HREF);
@@ -2883,10 +2980,25 @@ final class OutputOps {
         title = "";
       }
     }
+    int linkTextEnd = self.buffer.length();
+    // A released link no longer has a valid bracket anchor.
+    if (title.isEmpty() && tryAutolinkRewrite(self, resolved, isInline)) {
+      return;
+    }
     StringBuilder output = new StringBuilder();
     output.append(']');
     writeMarkdownResource(output, resolved, title);
     writeOutput(self, false, isInline, newLines, output.toString(), false);
+    // A length, not an offset; bracketPos is buffer.length() when no `[` was emitted.
+    self.lastContentCacheLen = Math.max(0, self.buffer.length() - self.link.bracketPos);
+    if ((self.cleanFlags & ConvertState.CLEAN_FRAGMENTS) != 0
+        && self.depthMap[Consts.TAG_CODE] == 0
+        // A skipped anchor has no link of its own; self.link is an ancestor's.
+        && self.link.beginDepth == self.depth
+        && resolved.startsWith("#")
+        && resolved.length() > 1) {
+      recordFragmentLink(self, resolved.substring(1), !title.isEmpty(), linkTextEnd);
+    }
     endLink(self);
   }
 
@@ -3349,20 +3461,21 @@ final class OutputOps {
     if (!node.isInline && !self.openMarkers.isEmpty()) {
       self.openMarkers.clear();
     }
+
+    // Clean: remember where the heading text starts so its slug can be collected on exit.
+    if ((self.cleanFlags & ConvertState.CLEAN_FRAGMENTS) != 0
+        && tagId >= Consts.TAG_H1
+        && tagId <= Consts.TAG_H6
+        && self.depthMap[Consts.TAG_A] == 0) {
+      self.inHeading = true;
+      self.headingBufferStart = self.buffer.length();
+    }
   }
 
   private static boolean endsWith(StringBuilder buffer, String suffix) {
     int len = buffer.length();
     int suffixLen = suffix.length();
-    if (suffixLen > len) {
-      return false;
-    }
-    for (int i = 0; i < suffixLen; i++) {
-      if (buffer.charAt(len - suffixLen + i) != suffix.charAt(i)) {
-        return false;
-      }
-    }
-    return true;
+    return suffixLen <= len && Chars.regionEquals(buffer, len - suffixLen, len, suffix);
   }
 
   private static boolean allEcmascriptWhitespace(String value) {
@@ -3484,6 +3597,17 @@ final class OutputOps {
     }
 
     if (tagId >= Consts.TAG_H1 && tagId <= Consts.TAG_H6 && self.depthMap[Consts.TAG_A] == 0) {
+      if ((self.cleanFlags & ConvertState.CLEAN_FRAGMENTS) != 0 && self.inHeading) {
+        // The recorded start can sit past the buffer end when a following
+        // element that emits nothing trimmed the heading's trailing space.
+        if (self.headingBufferStart <= self.buffer.length()) {
+          String slug = Url.slugifyHeading(self.buffer.substring(self.headingBufferStart));
+          if (!slug.isEmpty()) {
+            self.headingSlugs.add(slug);
+          }
+        }
+        self.inHeading = false;
+      }
       if (!self.plainText && !self.inTableCell()) {
         escapeTrailingHeadingHashes(self);
       }
@@ -4256,6 +4380,143 @@ final class OutputOps {
   // === Final output ===
 
   /**
+   * Applies {@code clean.fragments} using the positions recorded at each link's close.
+   *
+   * <p>Removing only the broken link's wrappers preserves nested link text without shifting the
+   * whole buffer after every match; the removals are compacted in place.
+   */
+  private static void applyFragmentRemovals(ConvertState self, int trimOffset) {
+    self.headingSlugs.sort(Chars::compareCodePoints);
+
+    List<ConvertState.FragmentLink> links = self.fragmentLinks;
+    // A nested <a> across a block boundary reuses the outer anchor's bracket
+    // position, so two entries can point at the same bracket. Rewriting either
+    // risks corrupting the other's text; skip any bracket used more than once.
+    int[] bracketStarts = new int[links.size()];
+    for (int i = 0; i < links.size(); i++) {
+      bracketStarts[i] = links.get(i).bracketStart;
+    }
+    Arrays.sort(bracketStarts);
+
+    StringBuilder buffer = self.buffer;
+    List<int[]> removals = new ArrayList<>();
+    for (ConvertState.FragmentLink link : links) {
+      if (hasAliasedBracket(bracketStarts, link.bracketStart)) {
+        continue;
+      }
+      int bracketStart = Math.max(0, link.bracketStart - trimOffset);
+      int textEnd = Math.max(0, link.textEnd - trimOffset);
+      int linkEnd = Math.max(0, link.linkEnd - trimOffset);
+      // A shifted buffer can leave a range that still looks like `[..]..)`
+      // without belonging to this link. Only an exact `](#fragment)` tail
+      // proves the entry survived every rewrite intact.
+      if (linkEnd > buffer.length()
+          || bracketStart >= textEnd
+          || textEnd >= linkEnd
+          || linkEnd - textEnd < 2
+          || buffer.charAt(bracketStart) != '['
+          || !Chars.startsWith(buffer, textEnd, "](")
+          || buffer.charAt(linkEnd - 1) != ')') {
+        continue;
+      }
+      // `](#fragment)` exactly, or the titled close `](#fragment "title")`
+      // recorded by hasTitle: the title itself is not compared, only its shape.
+      String fragment = link.fragment;
+      int fragmentEnd = textEnd + 3 + fragment.length();
+      boolean matched;
+      if (link.hasTitle) {
+        matched =
+            fragmentEnd + 1 < buffer.length()
+                && buffer.charAt(fragmentEnd) == ' '
+                && buffer.charAt(fragmentEnd + 1) == '"'
+                && buffer.charAt(linkEnd - 2) == '"'
+                && Chars.regionEquals(buffer, textEnd + 3, fragmentEnd, fragment);
+      } else {
+        matched =
+            linkEnd - textEnd == fragment.length() + 4
+                && Chars.regionEquals(buffer, textEnd + 3, linkEnd - 1, fragment);
+      }
+      if (!matched || containsSortedHeadingSlug(self.headingSlugs, fragment)) {
+        continue;
+      }
+      removals.add(new int[] {bracketStart, bracketStart + 1});
+      removals.add(new int[] {textEnd, linkEnd});
+    }
+
+    // Links are recorded at their close, so a link lands after the ones it
+    // wraps. Only nesting breaks the ascending order, so insertion sort keeps
+    // the pass linear on flat documents.
+    for (int index = 1; index < removals.size(); index++) {
+      int[] entry = removals.get(index);
+      int slot = index;
+      while (slot > 0 && removals.get(slot - 1)[0] > entry[0]) {
+        removals.set(slot, removals.get(slot - 1));
+        slot--;
+      }
+      removals.set(slot, entry);
+    }
+
+    // Only deletes, so compact in place: write trails read by the chars dropped.
+    int bufLen = buffer.length();
+    char[] chars = new char[bufLen];
+    buffer.getChars(0, bufLen, chars, 0);
+    int read = 0;
+    int write = 0;
+    for (int[] removal : removals) {
+      if (removal[1] <= read) {
+        continue;
+      }
+      if (removal[0] > read) {
+        System.arraycopy(chars, read, chars, write, removal[0] - read);
+        write += removal[0] - read;
+      }
+      read = removal[1];
+    }
+    if (read > 0) {
+      if (read < bufLen) {
+        System.arraycopy(chars, read, chars, write, bufLen - read);
+        write += bufLen - read;
+      }
+      buffer.setLength(0);
+      buffer.append(chars, 0, write);
+    }
+  }
+
+  private static boolean hasAliasedBracket(int[] sorted, int value) {
+    int low = 0;
+    int high = sorted.length - 1;
+    while (low <= high) {
+      int mid = (low + high) >>> 1;
+      if (sorted[mid] < value) {
+        low = mid + 1;
+      } else if (sorted[mid] > value) {
+        high = mid - 1;
+      } else {
+        return (mid > 0 && sorted[mid - 1] == value)
+            || (mid + 1 < sorted.length && sorted[mid + 1] == value);
+      }
+    }
+    return false;
+  }
+
+  private static boolean containsSortedHeadingSlug(List<String> slugs, String target) {
+    int start = 0;
+    int end = slugs.size();
+    while (start < end) {
+      int midpoint = start + (end - start) / 2;
+      int order = Chars.compareCodePoints(slugs.get(midpoint), target);
+      if (order < 0) {
+        start = midpoint + 1;
+      } else if (order > 0) {
+        end = midpoint;
+      } else {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Final output: trailing ASCII whitespace, then leading whitespace unless it is content.
    * Mirrors {@code get_markdown} in {@code convert/mod.rs}.
    */
@@ -4270,14 +4531,18 @@ final class OutputOps {
       end--;
     }
     truncateBuffer(self, end);
+    int start = 0;
     if (!self.preserveLeadingWhitespace) {
-      int start = 0;
       while (start < self.buffer.length() && Chars.isUnicodeWhitespace(self.buffer.charAt(start))) {
         start++;
       }
       if (start > 0) {
         self.buffer.delete(0, start);
+        noteBufferDrain(self, start);
       }
+    }
+    if ((self.cleanFlags & ConvertState.CLEAN_FRAGMENTS) != 0 && !self.fragmentLinks.isEmpty()) {
+      applyFragmentRemovals(self, start);
     }
     String out = self.buffer.toString();
     self.buffer.setLength(0);

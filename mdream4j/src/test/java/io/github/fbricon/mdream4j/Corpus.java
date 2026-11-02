@@ -76,11 +76,172 @@ public final class Corpus {
         case "maxNodeBytes":
           builder.maxNodeBytes(((Number) value).longValue());
           break;
+        case "clean":
+          builder.clean(clean(asObject(value)));
+          break;
+        case "plugins":
+          builder.plugins(plugins(asObject(value)));
+          break;
         default:
           throw new IllegalArgumentException("unsupported corpus option: " + name);
       }
     }
     return builder.build();
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> asObject(Object value) {
+    return (Map<String, Object>) value;
+  }
+
+  private static Clean clean(Map<String, Object> spec) {
+    Clean.Builder clean = Clean.builder();
+    for (Map.Entry<String, Object> entry : spec.entrySet()) {
+      boolean enabled = (Boolean) entry.getValue();
+      switch (entry.getKey()) {
+        case "urls":
+          clean.urls(enabled);
+          break;
+        case "fragments":
+          clean.fragments(enabled);
+          break;
+        case "emptyLinks":
+          clean.emptyLinks(enabled);
+          break;
+        case "redundantLinks":
+          clean.redundantLinks(enabled);
+          break;
+        case "selfLinkHeadings":
+          clean.selfLinkHeadings(enabled);
+          break;
+        case "emptyImages":
+          clean.emptyImages(enabled);
+          break;
+        case "emptyLinkText":
+          clean.emptyLinkText(enabled);
+          break;
+        default:
+          throw new IllegalArgumentException("unsupported clean option: " + entry.getKey());
+      }
+    }
+    return clean.build();
+  }
+
+  private static Plugins plugins(Map<String, Object> spec) {
+    Plugins.Builder plugins = Plugins.builder();
+    for (Map.Entry<String, Object> entry : spec.entrySet()) {
+      switch (entry.getKey()) {
+        case "filter":
+          plugins.filter(filter(asObject(entry.getValue())));
+          break;
+        case "isolateMain":
+          plugins.isolateMain((Boolean) entry.getValue());
+          break;
+        case "frontmatter":
+          plugins.frontmatter(frontmatter(asObject(entry.getValue())));
+          break;
+        case "tailwind":
+          plugins.tailwind((Boolean) entry.getValue());
+          break;
+        case "extraction":
+          plugins.extraction(
+              Extraction.of(strings(asObject(entry.getValue()).get("selectors"))));
+          break;
+        case "tagOverrides":
+          for (Map.Entry<String, Object> override : asObject(entry.getValue()).entrySet()) {
+            plugins.tagOverride(override.getKey(), tagOverride(asObject(override.getValue())));
+          }
+          break;
+        default:
+          throw new IllegalArgumentException("unsupported plugin option: " + entry.getKey());
+      }
+    }
+    return plugins.build();
+  }
+
+  private static Filter filter(Map<String, Object> spec) {
+    Filter.Builder filter = Filter.builder();
+    for (Map.Entry<String, Object> entry : spec.entrySet()) {
+      switch (entry.getKey()) {
+        case "include":
+          filter.include(strings(entry.getValue()));
+          break;
+        case "exclude":
+          filter.exclude(strings(entry.getValue()));
+          break;
+        case "processChildren":
+          filter.processChildren((Boolean) entry.getValue());
+          break;
+        default:
+          throw new IllegalArgumentException("unsupported filter option: " + entry.getKey());
+      }
+    }
+    return filter.build();
+  }
+
+  private static Frontmatter frontmatter(Map<String, Object> spec) {
+    Frontmatter.Builder frontmatter = Frontmatter.builder();
+    for (Map.Entry<String, Object> entry : spec.entrySet()) {
+      switch (entry.getKey()) {
+        case "additionalFields":
+          for (Map.Entry<String, Object> field : asObject(entry.getValue()).entrySet()) {
+            frontmatter.field(field.getKey(), (String) field.getValue());
+          }
+          break;
+        case "metaFields":
+          frontmatter.metaFields(strings(entry.getValue()));
+          break;
+        default:
+          throw new IllegalArgumentException("unsupported frontmatter option: " + entry.getKey());
+      }
+    }
+    return frontmatter.build();
+  }
+
+  private static TagOverride tagOverride(Map<String, Object> spec) {
+    TagOverride.Builder override = TagOverride.builder();
+    for (Map.Entry<String, Object> entry : spec.entrySet()) {
+      Object value = entry.getValue();
+      switch (entry.getKey()) {
+        case "enter":
+          override.enter((String) value);
+          break;
+        case "exit":
+          override.exit((String) value);
+          break;
+        case "spacing":
+          @SuppressWarnings("unchecked")
+          List<Object> spacing = (List<Object>) value;
+          override.spacing(
+              ((Number) spacing.get(0)).intValue(), ((Number) spacing.get(1)).intValue());
+          break;
+        case "isInline":
+          override.inline((Boolean) value);
+          break;
+        case "isSelfClosing":
+          override.selfClosing((Boolean) value);
+          break;
+        case "collapsesInnerWhiteSpace":
+          override.collapseInnerWhiteSpace((Boolean) value);
+          break;
+        case "alias":
+          override.alias((String) value);
+          break;
+        default:
+          throw new IllegalArgumentException("unsupported tag override option: " + entry.getKey());
+      }
+    }
+    return override.build();
+  }
+
+  private static String[] strings(Object value) {
+    @SuppressWarnings("unchecked")
+    List<Object> list = (List<Object>) value;
+    String[] strings = new String[list.size()];
+    for (int i = 0; i < list.size(); i++) {
+      strings[i] = (String) list.get(i);
+    }
+    return strings;
   }
 
   /** Minimal JSON reader for the corpus shape. */

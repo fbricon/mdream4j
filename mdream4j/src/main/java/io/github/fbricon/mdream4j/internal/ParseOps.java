@@ -5,13 +5,13 @@
  */
 package io.github.fbricon.mdream4j.internal;
 
-import io.github.fbricon.mdream4j.Clean;
-import io.github.fbricon.mdream4j.Filter;
 import io.github.fbricon.mdream4j.Frontmatter;
 import io.github.fbricon.mdream4j.Plugins;
 import io.github.fbricon.mdream4j.TagOverride;
-import java.util.Iterator;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
 /** HTML parsing: tag scanning, node lifecycle, text-buffer processing. Mirrors {@code convert/parse.rs}. */
 final class ParseOps {
@@ -186,10 +186,6 @@ final class ParseOps {
     }
   }
 
-  static boolean closesP(int id) {
-    return id >= 0 && id < CLOSES_P.length && CLOSES_P[id];
-  }
-
   static boolean needsImpliedEndRecovery(int id) {
     return id >= 0 && id < NEEDS_IMPLIED_END_RECOVERY.length && NEEDS_IMPLIED_END_RECOVERY[id];
   }
@@ -284,23 +280,6 @@ final class ParseOps {
 
   static void processTextBuffer(ConvertState self, StringBuilder textBuffer) {
     processTextBufferPiece(self, textBuffer, true);
-  }
-
-  private static boolean textNodeFastPathOk(ConvertState self) {
-    if (!OutputOps.textFastPathOk(self)) {
-      return false;
-    }
-    if (self.inPre
-        || self.overflowTagId >= 0
-        || self.overflowOpaqueDepth > 0
-        || self.overflowRawExcludesText
-        || !self.extractionTracked.isEmpty()) {
-      return false;
-    }
-    ElementNode parent = self.stack.size() == 0 ? null : self.stack.get(self.stack.size() - 1);
-    return parent == null
-        || (parent.tagId != Consts.TAG_TITLE
-            && (!self.hasTailwind || parent.tailwind() == null));
   }
 
   static void processTextBufferPiece(
@@ -1440,9 +1419,168 @@ final class ParseOps {
     }
   }
 
+  /** Byte-ordered, stable insertion sort; both collections stay small and bounded. */
+  static <T> void sortFieldsByKey(List<T> fields, Function<T, String> key) {
+    for (int index = 1; index < fields.size(); index++) {
+      int position = index;
+      while (position > 0
+          && Chars.compareCodePoints(
+                  key.apply(fields.get(position)), key.apply(fields.get(position - 1)))
+              < 0) {
+        T previous = fields.get(position - 1);
+        fields.set(position - 1, fields.get(position));
+        fields.set(position, previous);
+        position--;
+      }
+    }
+  }
+
   private static void generateFrontmatterYaml(ConvertState self) {
-    // Filled in with the frontmatter milestone; the head flag is still cleared
-    // at the right point so title/meta collection matches upstream.
+    if (!self.isMarkdown()) {
+      return;
+    }
+
+    Plugins plugins = self.options.plugins();
+    Frontmatter frontmatter = plugins == null ? null : plugins.frontmatter();
+
+    List<String> yamlOut = new ArrayList<>();
+    if (self.frontmatterTitle != null) {
+      yamlOut.add("title: " + yamlScalar(self.frontmatterTitle, true));
+    }
+
+    if (frontmatter != null && !frontmatter.additionalFields().isEmpty()) {
+      List<Map.Entry<String, String>> sorted =
+          new ArrayList<>(frontmatter.additionalFields().entrySet());
+      sortFieldsByKey(sorted, Map.Entry::getKey);
+      for (Map.Entry<String, String> field : sorted) {
+        String key = field.getKey();
+        if (!"title".equals(key) && !"description".equals(key)) {
+          yamlOut.add(key + ": " + yamlScalar(field.getValue(), false));
+        }
+      }
+    }
+
+    if (!self.frontmatterMeta.isEmpty()) {
+      yamlOut.add("meta:");
+      sortFieldsByKey(self.frontmatterMeta, field -> field[0]);
+      for (String[] field : self.frontmatterMeta) {
+        String key = field[0].indexOf(':') >= 0 ? '"' + field[0] + '"' : field[0];
+        yamlOut.add("  " + key + ": " + yamlScalar(field[1], true));
+      }
+    }
+
+    if (!yamlOut.isEmpty()) {
+      OutputOps.emitFrontmatter(self, "---\n" + String.join("\n", yamlOut) + "\n---\n\n");
+    }
+  }
+
+  /** Words a YAML 1.1 or 1.2 reader resolves to null or a boolean. */
+  private static final String[] YAML_IMPLICIT_WORDS = {
+    "null", "true", "false", "yes", "no", "on", "off", "y", "n", "~"
+  };
+
+  /**
+   * Formats a value as a YAML scalar, quoting only when a reader would not take it literally.
+   *
+   * <p>Text read from the page is a string, so with {@code asString} a value a reader would
+   * resolve to a number, date, boolean or null is quoted too; configured fields keep that typing.
+   */
+  private static String yamlScalar(String value, boolean asString) {
+    boolean quote;
+    if (value.isEmpty()) {
+      quote = true;
+    } else {
+      char first = value.charAt(0);
+      quote =
+          YAML_INDICATOR_FIRST.indexOf(first) >= 0
+              || (value.length() == 1 && (first == '-' || first == '?'))
+              || value.charAt(value.length() - 1) == '\t'
+              || value.indexOf(':') >= 0
+              || value.indexOf('#') >= 0
+              || value.indexOf(' ') >= 0
+              || value.indexOf('"') >= 0
+              || hasYamlUnprintable(value)
+              || (asString
+                  && ((first >= '0' && first <= '9') || first == '.' || first == '+'
+                      || (first == '-'
+                          && value.length() > 1
+                          && ((value.charAt(1) >= '0' && value.charAt(1) <= '9')
+                              || value.charAt(1) == '.'))
+                      || equalsAsciiIgnoreCaseAny(value, YAML_IMPLICIT_WORDS)));
+    }
+    if (!quote) {
+      return value;
+    }
+    StringBuilder out = new StringBuilder(value.length() + 2).append('"');
+    for (int i = 0; i < value.length(); i++) {
+      char ch = value.charAt(i);
+      switch (ch) {
+        case '\\':
+          out.append("\\\\");
+          break;
+        case '"':
+          out.append("\\\"");
+          break;
+        case '\n':
+          out.append("\\n");
+          break;
+        case '\r':
+          out.append("\\r");
+          break;
+        case '\t':
+          out.append("\\t");
+          break;
+        default:
+          if (Character.isISOControl(ch)
+              || ch == '\ufffe'
+              || ch == '\uffff'
+              || ch == '\u2028'
+              || ch == '\u2029') {
+            if (ch < 0x100) {
+              out.append("\\x").append(hexDigit(ch >> 4)).append(hexDigit(ch & 0xF));
+            } else {
+              out.append("\\u")
+                  .append(hexDigit(ch >> 12))
+                  .append(hexDigit((ch >> 8) & 0xF))
+                  .append(hexDigit((ch >> 4) & 0xF))
+                  .append(hexDigit(ch & 0xF));
+            }
+          } else {
+            out.append(ch);
+          }
+      }
+    }
+    return out.append('"').toString();
+  }
+
+  /** First characters that start YAML syntax rather than a plain scalar. */
+  private static final String YAML_INDICATOR_FIRST = ",[]{}&*!|>'%@`\t";
+
+  private static boolean hasYamlUnprintable(String value) {
+    for (int i = 0; i < value.length(); i++) {
+      char ch = value.charAt(i);
+      if (Character.isISOControl(ch)
+          || ch == '\ufffe'
+          || ch == '\uffff'
+          || ch == '\u2028'
+          || ch == '\u2029') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean equalsAsciiIgnoreCaseAny(String value, String[] words) {
+    for (String word : words) {
+      if (Chars.asciiEqualsIgnoreCase(value, word)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static char hexDigit(int value) {
+    return "0123456789abcdef".charAt(value & 0xF);
   }
 
   static CloseTagResult processClosingTag(ConvertState self, String chunk, int position) {
@@ -1631,10 +1769,11 @@ final class ParseOps {
       return;
     }
     TagOverride override = self.overrideForName("#cdata-section", -1);
-    if (override == null || override.alias() == null) {
+    if (override == null) {
       return;
     }
-    Integer alias = Consts.get_tag_id(override.alias());
+    // An override with only enter/exit still surfaces the section; its alias is optional.
+    Integer alias = override.alias() == null ? null : Consts.get_tag_id(override.alias());
     int tagId = alias == null ? -1 : alias;
     OpeningTagResult result = processOpeningTag(self, "#cdata-section", tagId, false, ">", 0);
     if (!result.complete) {
@@ -1968,8 +2107,13 @@ final class ParseOps {
 
       if (next == '!') {
         String remaining = chunk.substring(i);
-        if (remaining.startsWith("[CDATA[")) {
-          String afterOpen = remaining.substring(7);
+        // CDATA is dropped by default but can be surfaced via a #cdata-section
+        // override. Handle it before the generic comment/doctype scan, which
+        // would otherwise stop at the first `>` inside `]]>`.
+        String cdataAfterOpen =
+            i + 2 <= chunkLength ? chunk.substring(i + 2) : "";
+        if (cdataAfterOpen.startsWith("[CDATA[")) {
+          String afterOpen = cdataAfterOpen.substring(7);
           int rel = afterOpen.indexOf("]]>");
           if (rel >= 0) {
             int tokenLen = 9 + rel + 3;
@@ -1996,6 +2140,10 @@ final class ParseOps {
         }
         completeTextNode(self, textBuffer);
         runStart = i;
+        if (cdataAfterOpen.startsWith("[CDATA[")) {
+          discardDeclaration(self, remaining);
+          break;
+        }
         Scan.CommentResult result = Scan.processCommentOrDoctype(chunk, i);
         if (result.complete) {
           i = result.newPosition;
