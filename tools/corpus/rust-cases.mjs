@@ -199,10 +199,24 @@ function testSpans(src) {
   return spans;
 }
 
-/** Literal `let` bindings inside a span, in source order. */
+/** Literal `const` string bindings declared at file level, available everywhere. */
+function stringConstants(src) {
+  const bindings = [];
+  const re = /\bconst\s+(\w+)(?:\s*:[^=;]*)?\s*=\s*/g;
+  let match;
+  while ((match = re.exec(src)) !== null) {
+    const literal = parseLiteral(src, re.lastIndex);
+    if (literal) {
+      bindings.push({ position: -1, name: match[1], value: literal.value });
+    }
+  }
+  return bindings;
+}
+
+/** Literal `let` and local `const` bindings inside a span, in source order. */
 function letBindings(src, span) {
   const bindings = [];
-  const re = /\blet\s+(?:mut\s+)?(\w+)\s*=\s*/g;
+  const re = /\b(?:let|const)\s+(?:mut\s+)?(\w+)(?:\s*:[^=;]*)?\s*=\s*/g;
   re.lastIndex = span.start;
   let match;
   while ((match = re.exec(src)) !== null && match.index < span.end) {
@@ -212,6 +226,83 @@ function letBindings(src, span) {
     }
   }
   return bindings;
+}
+
+/** Literal elements of a `[ "a", "b" ]` array starting at `open`, or null. */
+function arrayElements(src, open) {
+  const values = [];
+  let i = open + 1;
+  for (;;) {
+    i = skipWs(src, i);
+    if (src[i] === "]") {
+      return { values, end: i + 1 };
+    }
+    const literal = parseLiteral(src, i);
+    if (!literal) {
+      return null;
+    }
+    values.push(literal.value);
+    i = skipWs(src, literal.end);
+    if (src[i] === ",") {
+      i++;
+      continue;
+    }
+    if (src[i] === "]") {
+      return { values, end: i + 1 };
+    }
+    return null;
+  }
+}
+
+/** Literal string-array constants in `src`, keyed by name. */
+function arrayConstants(src, from, to) {
+  const arrays = new Map();
+  const re = /(?:\bconst|\blet)\s+(\w+)(?:\s*:[^=]*)?\s*=\s*&?\s*\[/g;
+  re.lastIndex = from;
+  let match;
+  while ((match = re.exec(src)) !== null && match.index < to) {
+    const array = arrayElements(src, re.lastIndex - 1);
+    if (array) {
+      arrays.set(match[1], array.values);
+    }
+  }
+  return arrays;
+}
+
+/** `for <name> in <literal array | array constant> { ... }` loops inside a span. */
+function loopsIn(src, span, arrays) {
+  const loops = [];
+  const re = /\bfor\s+&?\s*(\w+)\s+in\s+/g;
+  re.lastIndex = span.start;
+  let match;
+  while ((match = re.exec(src)) !== null && match.index < span.end) {
+    let i = skipWs(src, re.lastIndex);
+    let values = null;
+    if (src[i] === "[") {
+      const array = arrayElements(src, i);
+      if (array) {
+        values = array.values;
+        i = array.end;
+      }
+    } else {
+      const identifier = /^(\w+)/.exec(src.slice(i));
+      if (identifier && arrays.has(identifier[1])) {
+        values = arrays.get(identifier[1]);
+        i += identifier[1].length;
+      }
+    }
+    if (!values) {
+      continue;
+    }
+    const open = src.indexOf("{", i);
+    if (open < 0 || open > span.end) {
+      continue;
+    }
+    const close = matchBrace(src, open);
+    loops.push({ name: match[1], values, start: open + 1, end: close });
+    re.lastIndex = close;
+  }
+  return loops;
 }
 
 function resolveValue(argument, bindings, position) {
@@ -294,9 +385,23 @@ function optionsFromExpression(expression, bindings, position) {
 function collectFile(path, idPrefix, helpers) {
   const src = fs.readFileSync(path, "utf8");
   const cases = [];
+  const fileArrays = arrayConstants(src, 0, src.length);
+  const fileStrings = stringConstants(src);
   let sequence = 0;
+  const add = (html, options) => {
+    if (html == null || options == null) {
+      return;
+    }
+    sequence++;
+    cases.push({
+      id: `${idPrefix}-${String(sequence).padStart(3, "0")}`,
+      html,
+      options,
+    });
+  };
   for (const span of testSpans(src)) {
-    const bindings = letBindings(src, span);
+    const bindings = [...fileStrings, ...letBindings(src, span)];
+    const arrays = new Map([...fileArrays, ...arrayConstants(src, span.start, span.end)]);
     for (const helper of helpers) {
       for (const call of callsIn(src, helper.name, span)) {
         const htmlIndex = helper.htmlIndex ?? 0;
@@ -307,23 +412,37 @@ function collectFile(path, idPrefix, helpers) {
         if (html == null) {
           continue;
         }
-        let options;
-        if (helper.options) {
-          options = helper.options(call, bindings);
-        } else if (helper.optionExpression != null) {
-          options = optionsFromExpression(call.args[helper.optionExpression], bindings, call.position);
-        } else {
-          options = {};
+        const options = helper.options
+          ? helper.options(call, bindings)
+          : helper.optionExpression != null
+              ? optionsFromExpression(call.args[helper.optionExpression], bindings, call.position)
+              : {};
+        add(html, options);
+      }
+    }
+    // A helper called with the loop variable applies to every literal element.
+    for (const loop of loopsIn(src, span, arrays)) {
+      for (const helper of helpers) {
+        for (const call of callsIn(src, helper.name, loop)) {
+          const htmlIndex = helper.htmlIndex ?? 0;
+          if (call.args.length <= htmlIndex) {
+            continue;
+          }
+          const isLoopVariable = new RegExp(`^&?\\s*${loop.name}$`).test(
+            call.args[htmlIndex].trim(),
+          );
+          if (!isLoopVariable) {
+            continue;
+          }
+          const options = helper.options
+            ? helper.options(call, bindings)
+            : helper.optionExpression != null
+                ? optionsFromExpression(call.args[helper.optionExpression], bindings, call.position)
+                : {};
+          for (const html of loop.values) {
+            add(html, options);
+          }
         }
-        if (options == null) {
-          continue;
-        }
-        sequence++;
-        cases.push({
-          id: `${idPrefix}-${String(sequence).padStart(3, "0")}`,
-          html,
-          options,
-        });
       }
     }
   }
@@ -372,6 +491,36 @@ export function collectRustCases(upstream) {
     ...collectFile(`${tests}/max_node_bytes.rs`, "rust-cap", [
       { name: "assert_capped_text", options: cappedOptions },
       { name: "assert_capped_inline_code", options: cappedOptions },
+    ]),
+  );
+  cases.push(
+    ...collectFile(`${tests}/streaming_drain.rs`, "rust-stream", [
+      { name: "assert_stream_matches", optionExpression: 1 },
+      { name: "assert_stream_matches_every_split", optionExpression: 1 },
+      { name: "assert_text_stream_matches_every_split" },
+    ]),
+  );
+  // Recovery and structure regressions: each file wraps a local `convert` that
+  // applies the default options, so the literal argument is the whole input.
+  const recovery = [
+    ["end_tag_recovery.rs", "rust-endtag"],
+    ["head_autoclose.rs", "rust-head"],
+    ["select_option.rs", "rust-select"],
+    ["template_parsing.rs", "rust-template"],
+    ["templates.rs", "rust-templates"],
+  ];
+  for (const [file, prefix] of recovery) {
+    cases.push(
+      ...collectFile(`${tests}/${file}`, prefix, [
+        { name: "convert" },
+        { name: "html_to_markdown", optionExpression: 1 },
+      ]),
+    );
+  }
+  cases.push(
+    ...collectFile(`${tests}/head_title.rs`, "rust-title", [
+      { name: "html_to_markdown", optionExpression: 1 },
+      { name: "html_to_markdown_result", optionExpression: 1 },
     ]),
   );
   return cases;
