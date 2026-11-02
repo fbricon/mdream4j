@@ -22,6 +22,12 @@
 
   <dependencies>
     <dependency>
+      <groupId>io.github.fbricon</groupId>
+      <artifactId>mdream4j</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
     </dependency>

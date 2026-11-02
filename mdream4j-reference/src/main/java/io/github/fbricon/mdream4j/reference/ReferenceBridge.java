@@ -127,6 +127,11 @@ public final class ReferenceBridge {
    * @return the Markdown output
    */
   public static String convert(String html, String optionsJson) {
+    return convertResult(html, optionsJson).markdown;
+  }
+
+  /** One-shot conversion plus the reference's truncation flag. */
+  public static ReferenceResult convertResult(String html, String optionsJson) {
     Objects.requireNonNull(html, "html");
     Objects.requireNonNull(optionsJson, "optionsJson");
     ensureAvailable();
@@ -143,11 +148,23 @@ public final class ReferenceBridge {
           optionsSegment.byteSize(),
           outLength,
           outTruncated);
-      return readAndFree(pointer, outLength.get(ValueLayout.JAVA_LONG, 0));
+      String markdown = readAndFree(pointer, outLength.get(ValueLayout.JAVA_LONG, 0));
+      return new ReferenceResult(markdown, outTruncated.get(ValueLayout.JAVA_BYTE, 0) != 0);
     } catch (RuntimeException | Error e) {
       throw e;
     } catch (Throwable t) {
       throw new IllegalStateException(t);
+    }
+  }
+
+  /** Reference markdown and truncation flag. */
+  public static final class ReferenceResult {
+    public final String markdown;
+    public final boolean truncated;
+
+    ReferenceResult(String markdown, boolean truncated) {
+      this.markdown = markdown;
+      this.truncated = truncated;
     }
   }
 
@@ -237,6 +254,7 @@ public final class ReferenceBridge {
   public static final class ReferenceStream implements AutoCloseable {
 
     private MemorySegment handle;
+    private boolean truncated;
 
     private ReferenceStream(MemorySegment handle) {
       this.handle = handle;
@@ -266,12 +284,19 @@ public final class ReferenceBridge {
         MemorySegment outLength = arena.allocate(ValueLayout.JAVA_LONG);
         MemorySegment outTruncated = arena.allocate(ValueLayout.JAVA_BYTE);
         MemorySegment pointer = (MemorySegment) STREAM_FINISH.invokeExact(handle, outLength, outTruncated);
-        return readAndFree(pointer, outLength.get(ValueLayout.JAVA_LONG, 0));
+        String markdown = readAndFree(pointer, outLength.get(ValueLayout.JAVA_LONG, 0));
+        this.truncated = outTruncated.get(ValueLayout.JAVA_BYTE, 0) != 0;
+        return markdown;
       } catch (RuntimeException | Error e) {
         throw e;
       } catch (Throwable t) {
         throw new IllegalStateException(t);
       }
+    }
+
+    /** Whether the conversion dropped content, as reported by {@link #finish()}. */
+    public boolean truncated() {
+      return truncated;
     }
 
     @Override
