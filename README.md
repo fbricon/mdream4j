@@ -95,7 +95,8 @@ cargo build --release --manifest-path tools/reference/Cargo.toml
 ./mvnw -Pwith-reference verify
 ```
 
-See [`docs/REFERENCE.md`](docs/REFERENCE.md) for the corpus and bridge details.
+See [`docs/REFERENCE.md`](docs/REFERENCE.md) for the corpus and bridge details, and
+[`docs/RELEASING.md`](docs/RELEASING.md) for cutting a release.
 
 ## Benchmarks
 
