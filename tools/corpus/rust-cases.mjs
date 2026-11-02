@@ -130,7 +130,10 @@ function splitArguments(src, index) {
       depth++;
     } else if (c === ")" || c === "]" || c === "}") {
       if (depth === 0) {
-        args.push(current.trim());
+        // A trailing comma leaves an empty tail; it is not an argument.
+        if (current.trim() !== "") {
+          args.push(current.trim());
+        }
         return { args, end: i + 1 };
       }
       depth--;
@@ -213,6 +216,25 @@ function stringConstants(src) {
   return bindings;
 }
 
+/** Parses a literal string expression: a literal or a `concat!` of literals. */
+function parseLiteralExpression(src, index) {
+  const i = skipWs(src, index);
+  if (/^concat!\s*\(/.test(src.slice(i))) {
+    const open = src.indexOf("(", i);
+    const { args, end } = splitArguments(src, open + 1);
+    let value = "";
+    for (const arg of args) {
+      const literal = parseLiteral(arg, 0);
+      if (!literal) {
+        return null;
+      }
+      value += literal.value;
+    }
+    return { value, end };
+  }
+  return parseLiteral(src, i);
+}
+
 /** Literal `let` and local `const` bindings inside a span, in source order. */
 function letBindings(src, span) {
   const bindings = [];
@@ -220,7 +242,7 @@ function letBindings(src, span) {
   re.lastIndex = span.start;
   let match;
   while ((match = re.exec(src)) !== null && match.index < span.end) {
-    const literal = parseLiteral(src, re.lastIndex);
+    const literal = parseLiteralExpression(src, re.lastIndex);
     if (literal) {
       bindings.push({ position: match.index, name: match[1], value: literal.value });
     }
@@ -533,6 +555,48 @@ export function collectRustCases(upstream) {
       { name: "assert_stream_matches" },
     ]),
   );
+  // The parity sweep stores its inputs as U+001E-separated fixture text.
+  cases.push(
+    ...sweepFixture(`${tests}/fixtures/html-stream-parity.txt`, "rust-sweep"),
+  );
+  cases.push(
+    ...collectFile(`${tests}/streaming_plugin_data.rs`, "rust-plugin", [
+      {
+        name: "html_to_markdown_result",
+        options: () => ({
+          plugins: {
+            frontmatter: {},
+            extraction: { selectors: ["a[href]"] },
+          },
+        }),
+      },
+    ]),
+  );
+  cases.push(
+    ...collectFile(`${tests}/allocation_hotpaths.rs`, "rust-hotpath", [
+      {
+        name: "html_to_format",
+        options: () => ({
+          origin: "https://example.com/docs/page",
+          clean: { urls: true, redundantLinks: true },
+          plugins: { tailwind: true },
+        }),
+      },
+    ]),
+  );
   return cases;
+}
+
+/** Splits a U+001E-separated fixture into one default-options case per input. */
+function sweepFixture(path, idPrefix) {
+  return fs
+    .readFileSync(path, "utf8")
+    .split("\u001e")
+    .filter((html) => html.length > 0)
+    .map((html, index) => ({
+      id: `${idPrefix}-${String(index + 1).padStart(3, "0")}`,
+      html,
+      options: {},
+    }));
 }
 

@@ -76,7 +76,7 @@ class StreamingDrainTest {
   @Test
   void goldenCorpusStreamsIdenticallyWithAndWithoutDraining() throws IOException {
     List<Map<String, Object>> cases = Corpus.loadCases();
-    assertTrue(cases.size() >= 1006, "corpus must not shrink: " + cases.size());
+    assertTrue(cases.size() >= 1190, "corpus must not shrink: " + cases.size());
 
     List<String> failures = new ArrayList<>();
     int checks = 0;

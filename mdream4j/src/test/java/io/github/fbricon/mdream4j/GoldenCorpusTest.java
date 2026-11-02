@@ -29,15 +29,15 @@ import org.junit.jupiter.api.Test;
 class GoldenCorpusTest {
 
   /** Parity floors, raised as the port converges. */
-  private static final int MARKDOWN_FLOOR = 1006;
-  private static final int TEXT_FLOOR = 1006;
-  private static final int HTML_FLOOR = 1006;
-  private static final int METADATA_FLOOR = 1006;
+  private static final int MARKDOWN_FLOOR = 1190;
+  private static final int TEXT_FLOOR = 1190;
+  private static final int HTML_FLOOR = 1190;
+  private static final int METADATA_FLOOR = 1190;
 
   @Test
   void matchesReferenceCorpus() throws IOException {
     List<Map<String, Object>> cases = Corpus.loadCases();
-    assertTrue(cases.size() >= 1006, "corpus must not shrink: " + cases.size());
+    assertTrue(cases.size() >= 1190, "corpus must not shrink: " + cases.size());
 
     int markdownPass = 0;
     int textPass = 0;
