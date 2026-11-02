@@ -351,11 +351,18 @@ final class ParseOps {
     int firstBlockChildTextCount =
         firstBlockParentIndex >= 0 ? self.stack.get(firstBlockParentIndex).childTextNodeIndex : 0;
 
-    boolean isFirstTextInBlock =
-        firstBlockChildTextCount == 0
-            && (firstBlockParentIndex >= 0
-                || self.buffer.length() == 0
-                || self.buffer.charAt(self.buffer.length() - 1) == '\n');
+    boolean isFirstTextInBlock;
+    if (firstBlockChildTextCount != 0) {
+      isFirstTextInBlock = false;
+    } else if (firstBlockParentIndex >= 0) {
+      isFirstTextInBlock = true;
+    } else if (self.buffer.length() > 0) {
+      isFirstTextInBlock = self.buffer.charAt(self.buffer.length() - 1) == '\n';
+    } else {
+      // An `html` stream hands out its whole buffer each chunk, so an empty buffer there only
+      // means a document start when nothing was yielded before it.
+      isFirstTextInBlock = !self.htmlFormat || self.flushedTail[1] == '\n';
+    }
 
     if (containsWhitespace && isFirstTextInBlock) {
       int start = 0;

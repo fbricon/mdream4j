@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Streaming parity: concatenating every chunk a {@link MarkdownStream} returns must be
- * byte-identical to one-shot conversion, at every chunk size.
+ * byte-identical to one-shot conversion, at every chunk size and for every output format.
  *
  * <p>Small chunk sizes are skipped for very large documents because the sweep would otherwise be
  * quadratic; the interesting boundary behaviour is covered by every other case.
@@ -23,6 +23,10 @@ import org.junit.jupiter.api.Test;
 class GoldenStreamingTest {
 
   private static final int[] CHUNK_SIZES = {1, 2, 3, 7, 64, 4096};
+
+  private static final OutputFormat[] FORMATS = {
+    OutputFormat.MARKDOWN, OutputFormat.TEXT, OutputFormat.HTML
+  };
 
   /** Skip tiny chunks for inputs where the O(n^2/size) sweep would dominate the build. */
   private static final int LARGE_INPUT = 200_000;
@@ -40,35 +44,38 @@ class GoldenStreamingTest {
       String html = (String) corpusCase.get("html");
       @SuppressWarnings("unchecked")
       Map<String, Object> outputs = (Map<String, Object>) corpusCase.get("outputs");
-      String expected = (String) outputs.get("markdown");
       boolean expectedTruncated = Boolean.TRUE.equals(outputs.get("truncated"));
 
-      for (int size : CHUNK_SIZES) {
-        if (html.length() > LARGE_INPUT && size < LARGE_INPUT_MIN_CHUNK) {
-          continue;
-        }
-        checks++;
-        Options options = Corpus.options(corpusCase);
-        MarkdownStream stream = HtmlToMarkdown.newStream(options);
-        StringBuilder out = new StringBuilder();
-        for (int start = 0; start < html.length(); start += size) {
-          out.append(stream.feed(html.substring(start, Math.min(html.length(), start + size))));
-        }
-        out.append(stream.finish());
-        String actual = out.toString();
-        if (!expected.equals(actual) || stream.truncated() != expectedTruncated) {
-          if (failures.size() < 20) {
-            failures.add(
-                id
-                    + " size="
-                    + size
-                    + "\n  expected: "
-                    + escape(expected)
-                    + "\n  actual:   "
-                    + escape(actual)
-                    + (stream.truncated() == expectedTruncated
-                        ? ""
-                        : "\n  truncated flag differs"));
+      for (OutputFormat format : FORMATS) {
+        String expected = (String) outputs.get(format.name().toLowerCase(java.util.Locale.ROOT));
+        for (int size : CHUNK_SIZES) {
+          if (html.length() > LARGE_INPUT && size < LARGE_INPUT_MIN_CHUNK) {
+            continue;
+          }
+          checks++;
+          MarkdownStream stream = HtmlToMarkdown.newStream(Corpus.options(corpusCase, format));
+          StringBuilder out = new StringBuilder();
+          for (int start = 0; start < html.length(); start += size) {
+            out.append(stream.feed(html.substring(start, Math.min(html.length(), start + size))));
+          }
+          out.append(stream.finish());
+          String actual = out.toString();
+          boolean truncatedMismatch =
+              format == OutputFormat.MARKDOWN && stream.truncated() != expectedTruncated;
+          if (!expected.equals(actual) || truncatedMismatch) {
+            if (failures.size() < 20) {
+              failures.add(
+                  id
+                      + " "
+                      + format
+                      + " size="
+                      + size
+                      + "\n  expected: "
+                      + escape(expected)
+                      + "\n  actual:   "
+                      + escape(actual)
+                      + (truncatedMismatch ? "\n  truncated flag differs" : ""));
+            }
           }
         }
       }
@@ -77,7 +84,7 @@ class GoldenStreamingTest {
     assertTrue(
         failures.isEmpty(),
         failures.size() + " streaming mismatch(es):\n" + String.join("\n", failures));
-    assertTrue(checks >= 800, "streaming checks must not shrink: " + checks);
+    assertTrue(checks >= 3000, "streaming checks must not shrink: " + checks);
   }
 
   private static String escape(String value) {
