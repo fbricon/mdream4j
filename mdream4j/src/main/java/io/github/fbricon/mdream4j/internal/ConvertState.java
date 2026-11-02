@@ -233,6 +233,12 @@ final class ConvertState {
   static final int CLEAN_EMPTY_LINK_TEXT = 32;
 
   static final int SCRIPT_DATA = 0;
+  static final int SCRIPT_DATA_ESCAPED = 1;
+  static final int SCRIPT_DATA_ESCAPED_DASH = 2;
+  static final int SCRIPT_DATA_ESCAPED_DASH_DASH = 3;
+  static final int SCRIPT_DATA_DOUBLE_ESCAPED = 4;
+  static final int SCRIPT_DATA_DOUBLE_ESCAPED_DASH = 5;
+  static final int SCRIPT_DATA_DOUBLE_ESCAPED_DASH_DASH = 6;
   static final int GFM_HAZARD_BIT = 1;
   static final int GFM_NEWLINE_BIT = 2;
   static final int GFM_TEXT_ACTIVE_BIT = 4;

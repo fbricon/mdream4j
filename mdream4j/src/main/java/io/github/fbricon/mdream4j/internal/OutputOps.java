@@ -736,6 +736,103 @@ final class OutputOps {
     self.buffer.append(text);
   }
 
+  /** Whether prose here may be hard-wrapped: not code, a table cell or a heading. */
+  private static boolean canWrapHere(ConvertState self) {
+    return self.depthMap[Consts.TAG_PRE] == 0
+        && self.depthMap[Consts.TAG_CODE] == 0
+        && !self.inTableCell()
+        && !self.inHeading();
+  }
+
+  /** Character count of the current buffer line, including any block prefix already written. */
+  private static int currentColumn(ConvertState self) {
+    int lineStart = self.buffer.length();
+    while (lineStart > 0 && self.buffer.charAt(lineStart - 1) != '\n') {
+      lineStart--;
+    }
+    int buffered = Character.codePointCount(self.buffer, lineStart, self.buffer.length());
+    return lineStart == 0 ? self.bufferStartColumn + buffered : buffered;
+  }
+
+  /** A word that would turn into a setext underline if it ever started a line. */
+  private static boolean isSetextMarkerRun(String word) {
+    if (word.isEmpty()) {
+      return false;
+    }
+    return word.charAt(0) == '-'
+        ? isDashLine(word, 0)
+        : word.charAt(0) == '=' && isEqualsLine(word, 0);
+  }
+
+  /**
+   * Pushes prose, breaking on spaces so no line exceeds {@code wrapWidth}.
+   *
+   * <p>Words are never split, so an over-long token overflows instead. A break only replaces an
+   * inter-word space, keeping words joined across inline boundaries intact.
+   */
+  private static void pushTextWrapped(
+      ConvertState self,
+      String text,
+      int lastChar,
+      boolean ownsLeadingSpace,
+      boolean relocatedSpace) {
+    int width = self.wrapWidth;
+    boolean leadingSpace = text.startsWith(" ");
+    boolean trailingSpace = text.endsWith(" ");
+    boolean firstNeedsSpace =
+        relocatedSpace
+            || leadingSpace
+            || (!ownsLeadingSpace && shouldAddSpacingBeforeText(self, lastChar, text));
+    String prefix = continuationPrefix(self);
+    int prefixLen = Character.codePointCount(prefix, 0, prefix.length());
+    int bufferStart = self.buffer.length();
+    int column = currentColumn(self);
+    boolean first = true;
+
+    int wordStart = 0;
+    while (wordStart <= text.length()) {
+      int wordEnd = text.indexOf(' ', wordStart);
+      if (wordEnd < 0) {
+        wordEnd = text.length();
+      }
+      String word = text.substring(wordStart, wordEnd);
+      wordStart = wordEnd + 1;
+      if (word.isEmpty()) {
+        if (wordEnd == text.length()) {
+          break;
+        }
+        continue;
+      }
+      int wordLen = Character.codePointCount(word, 0, word.length());
+      boolean needSpace = first ? firstNeedsSpace : true;
+      if (needSpace
+          && column > prefixLen
+          && column + 1 + wordLen > width
+          && (self.plainText || !isSetextMarkerRun(word))) {
+        self.buffer.append('\n');
+        self.buffer.append(prefix);
+        column = prefixLen;
+      } else if (needSpace) {
+        self.buffer.append(' ');
+        column++;
+      }
+      self.buffer.append(word);
+      column += wordLen;
+      first = false;
+      if (wordEnd == text.length()) {
+        break;
+      }
+    }
+
+    if (trailingSpace
+        && self.buffer.length() > bufferStart
+        && self.buffer.charAt(self.buffer.length() - 1) != ' '
+        && self.buffer.charAt(self.buffer.length() - 1) != '\n') {
+      self.buffer.append(' ');
+    }
+    self.lastContentCacheLen = self.buffer.length() - bufferStart;
+  }
+
   /** Inline marker kind a tag pairs, or 0 when its output is not a matched marker. */
   private static int inlineMarkerType(int tagId) {
     switch (tagId) {
@@ -813,7 +910,7 @@ final class OutputOps {
         self.hardBreakEnd = marker.outputStart;
       }
       self.lastContentCacheLen = 0;
-      // No tentative caption frames yet.
+      resetEmptyTentativeCaptionFrames(self);
       self.lastNodeIsInline = isInline;
       return true;
     }
@@ -974,7 +1071,11 @@ final class OutputOps {
           && last != '\n'
           && last != '\t'
           && !Scan.isWhitespace(first)) {
-        self.buffer.append(' ');
+        if (self.wrapWidth != 0 && canWrapHere(self)) {
+          relocatedSpace = true;
+        } else {
+          self.buffer.append(' ');
+        }
       }
       self.pendingInlineWhitespace = false;
     }
@@ -1077,7 +1178,9 @@ final class OutputOps {
 
     boolean ownsSpace =
         ownsLeadingSpace || (self.plainText && self.depthMap[Consts.TAG_PRE] > 0);
-    if (!ownsSpace && shouldAddSpacingBeforeText(self, lastChar, text)) {
+    if (self.wrapWidth != 0 && canWrapHere(self)) {
+      pushTextWrapped(self, text, lastChar, ownsLeadingSpace, relocatedSpace);
+    } else if (!ownsSpace && shouldAddSpacingBeforeText(self, lastChar, text)) {
       pushTextUncapped(self, " ", false);
       self.lastContentCacheLen += text.length();
       self.buffer.append(text);
@@ -1149,17 +1252,36 @@ final class OutputOps {
     return output.toString();
   }
 
-  private static String foldPreLinesToBr(String text) {
-    StringBuilder out = new StringBuilder(text.length());
-    for (int i = 0; i < text.length(); i++) {
-      char c = text.charAt(i);
-      if (c == '\n') {
+  private static String foldPreLinesToBr(String value) {
+    int start = 0;
+    while (start < value.length()
+        && (value.charAt(start) == '\n' || value.charAt(start) == '\r')) {
+      start++;
+    }
+    int end = value.length();
+    while (end > start
+        && (value.charAt(end - 1) == '\n' || value.charAt(end - 1) == '\r')) {
+      end--;
+    }
+    StringBuilder out = new StringBuilder(end - start);
+    for (int i = start; i < end; i++) {
+      char c = value.charAt(i);
+      if (c == '\r') {
         out.append("<br>");
-      } else if (c == '\r') {
-        // A following LF is folded on its own, so a CRLF produces one <br>.
-        if (i + 1 >= text.length() || text.charAt(i + 1) != '\n') {
-          out.append("<br>");
+        // A CRLF pair folds to one break; the LF alone would add a second.
+        if (i + 1 < end && value.charAt(i + 1) == '\n') {
+          i++;
         }
+      } else if (c == '\n') {
+        out.append("<br>");
+      } else if (c == '&') {
+        out.append("&amp;");
+      } else if (c == '<') {
+        out.append("&lt;");
+      } else if (c == '>') {
+        out.append("&gt;");
+      } else if (c == '|') {
+        out.append("&#124;");
       } else {
         out.append(c);
       }
@@ -1538,7 +1660,18 @@ final class OutputOps {
         }
         return null;
       case Consts.TAG_BLOCKQUOTE:
-        return (self.depthMap[Consts.TAG_LI] > 0) ? "\n" : null;
+        return (self.depthMap[Consts.TAG_LI] > 0
+                && self.captionBoundary != ConvertState.CAPTION_BOUNDARY_PENDING)
+            ? "\n"
+            : null;
+      case Consts.TAG_CAPTION:
+        // A caption has no handler of its own, so inside a list item nothing
+        // writes its content column: glued to preceding text it swallows the
+        // table's first row, and at column 0 it takes the table out of the item.
+        if (self.depthMap[Consts.TAG_LI] > 0 && !self.inTableCell()) {
+          return blockOpenPrefix(self, self.listIndent.toString());
+        }
+        return null;
       case Consts.TAG_CODE:
         if (self.depthMap[Consts.TAG_PRE] > 0) {
           if (self.inTableCell()) {
@@ -3497,6 +3630,9 @@ final class OutputOps {
   static void emitExitElement(ConvertState self, ElementNode node) {
     int tagId = node.tagId;
     boolean isInline = node.isInline;
+    if (tagId == Consts.TAG_LI) {
+      self.listRulePending = false;
+    }
     if (node.excludedFromMarkdown
         || (node.enterSkipped
             && (tagId != Consts.TAG_PRE
@@ -3613,10 +3749,27 @@ final class OutputOps {
       }
     }
 
-    if (tagId == Consts.TAG_A && !self.plainText && !rawHtmlAnchor) {
+    if (tagId == Consts.TAG_A && (self.cleanFlags & ConvertState.CLEAN_EMPTY_LINK_TEXT) == 0) {
+      expandDeferredCaptionBreaks(self);
+    }
+
+    if (tagId == Consts.TAG_A
+        && !self.plainText
+        && !rawHtmlAnchor
+        && !hasOverride
+        && tableSeparator == null
+        && self.depthMap[Consts.TAG_PRE] == 0) {
       int[] config = calculateNewLineConfig(self, tagId, effectiveSpacing(node, override), false);
       writeLinkExit(self, node, isInline, config[1]);
       return;
+    }
+
+    if (!hasOverride
+        && !self.plainText
+        && tagId == Consts.TAG_HR
+        && !self.inTableCell()
+        && self.depthMap[Consts.TAG_LI] > 0) {
+      self.listRulePending = true;
     }
 
     int[] spacing = effectiveSpacing(node, override);
@@ -3624,9 +3777,6 @@ final class OutputOps {
 
     boolean captionExit =
         tagId == Consts.TAG_FIGCAPTION && self.depthMap[Consts.TAG_PRE] == 0;
-    if (tagId == Consts.TAG_A && (self.cleanFlags & ConvertState.CLEAN_EMPTY_LINK_TEXT) == 0) {
-      expandDeferredCaptionBreaks(self);
-    }
     boolean captionActive =
         captionExit
             || self.captionBoundary != ConvertState.CAPTION_BOUNDARY_NONE

@@ -1338,7 +1338,7 @@ final class ParseOps {
           self.refreshRawHtmlBlock(nodeTagId);
           self.updateInPreOnClose(nodeTagId);
           if (nodeTagId == Consts.TAG_OL) {
-            popList(self);
+            popOrderedList(self);
           } else if (nodeTagId == Consts.TAG_UL) {
             popList(self);
           }
@@ -1373,7 +1373,7 @@ final class ParseOps {
       self.refreshRawHtmlBlock(nodeTagId);
       self.updateInPreOnClose(nodeTagId);
       if (nodeTagId == Consts.TAG_OL) {
-        popList(self);
+        popOrderedList(self);
       } else if (nodeTagId == Consts.TAG_UL) {
         popList(self);
       }
@@ -1402,13 +1402,18 @@ final class ParseOps {
     }
   }
 
+  /** Pops one list level's item counter, shared by ordered and unordered lists. */
   private static void popList(ConvertState self) {
-    if (!self.orderedStarts.isEmpty()) {
-      self.orderedStarts.remove(self.orderedStarts.size() - 1);
-    }
     if (!self.listItemCounts.isEmpty()) {
       self.listItemCounts.remove(self.listItemCounts.size() - 1);
     }
+  }
+
+  private static void popOrderedList(ConvertState self) {
+    if (!self.orderedStarts.isEmpty()) {
+      self.orderedStarts.remove(self.orderedStarts.size() - 1);
+    }
+    popList(self);
   }
 
   private static void popListIndent(ConvertState self) {
@@ -1865,6 +1870,22 @@ final class ParseOps {
       }
     }
 
+    if (self.stack.size() > 0) {
+      ElementNode scriptTop = self.stack.get(self.stack.size() - 1);
+      if (scriptTop.tagId == Consts.TAG_SCRIPT
+          && (scriptTop.customName() == null || scriptTop.customName().equals("script"))) {
+        int close = processScriptChunk(self, chunk, i);
+        if (close >= 0) {
+          i = close;
+        } else {
+          runStart = -close - 1;
+          carry = true;
+          carryBounded = true;
+          i = chunkLength;
+        }
+      }
+    }
+
     while (i < chunkLength) {
       if (textBuffer.length() == 0) {
         runStart = i;
@@ -2237,6 +2258,17 @@ final class ParseOps {
             self.justClosedTag = true;
           } else {
             self.isFirstTextInElement = true;
+            if (builtin == Consts.TAG_SCRIPT && tagId == Consts.TAG_SCRIPT) {
+              int close = processScriptChunk(self, chunk, i);
+              if (close >= 0) {
+                i = close;
+              } else {
+                runStart = -close - 1;
+                carry = true;
+                carryBounded = true;
+                break;
+              }
+            }
           }
         } else {
           break;
@@ -2462,6 +2494,210 @@ final class ParseOps {
     }
     StringBuilder scriptText = self.scriptTextBuffer;
     completeTextNode(self, scriptText);
+  }
+
+  /** One `findScriptEndTag` result: what boundary was hit and the tokenizer state to keep. */
+  private static final class ScriptScan {
+    static final int COMPLETE = 0;
+    static final int CLOSE = 1;
+    static final int PENDING = 2;
+
+    final int boundary;
+    final int index;
+    final int state;
+
+    ScriptScan(int boundary, int index, int state) {
+      this.boundary = boundary;
+      this.index = index;
+      this.state = state;
+    }
+  }
+
+  /**
+   * Matches {@code </name} case-insensitively and returns the index past its delimiter.
+   *
+   * <p>Returns {@link #SCRIPT_SEQUENCE_INCOMPLETE} when the chunk ends inside the candidate, so
+   * the caller carries the raw tail into the next chunk instead of treating it as text.
+   */
+  private static final int SCRIPT_SEQUENCE_NO_MATCH = -1;
+  private static final int SCRIPT_SEQUENCE_INCOMPLETE = -2;
+  private static final String SCRIPT_NAME = "script";
+
+  private static int scriptSequenceEnd(String chunk, int nameStart) {
+    for (int offset = 0; offset < SCRIPT_NAME.length(); offset++) {
+      int index = nameStart + offset;
+      if (index >= chunk.length()) {
+        return SCRIPT_SEQUENCE_INCOMPLETE;
+      }
+      if ((chunk.charAt(index) | 32) != SCRIPT_NAME.charAt(offset)) {
+        return SCRIPT_SEQUENCE_NO_MATCH;
+      }
+    }
+    int delimiterIndex = nameStart + SCRIPT_NAME.length();
+    if (delimiterIndex >= chunk.length()) {
+      return SCRIPT_SEQUENCE_INCOMPLETE;
+    }
+    char delimiter = chunk.charAt(delimiterIndex);
+    if (delimiter == '>' || delimiter == '/' || Scan.isWhitespace(delimiter)) {
+      return delimiterIndex + 1;
+    }
+    return SCRIPT_SEQUENCE_NO_MATCH;
+  }
+
+  /**
+   * Finds the first script end tag the HTML tokenizer would emit.
+   *
+   * <p>The script-data escaped states keep a {@code </script>} inside a comment-looking run from
+   * closing the element early, matching the tokenizer's {@code script data escaped} rules.
+   */
+  private static ScriptScan findScriptEndTag(String chunk, int start, int initialState) {
+    int state = initialState;
+    int i = start;
+    int length = chunk.length();
+
+    while (i < length) {
+      if (state == ConvertState.SCRIPT_DATA) {
+        int next = chunk.indexOf('<', i);
+        i = next < 0 ? length : next;
+      } else if (state == ConvertState.SCRIPT_DATA_ESCAPED
+          || state == ConvertState.SCRIPT_DATA_DOUBLE_ESCAPED) {
+        while (i < length) {
+          char b = chunk.charAt(i);
+          if (b == '<' || b == '-') {
+            break;
+          }
+          i++;
+        }
+      }
+      if (i == length) {
+        break;
+      }
+
+      char c = chunk.charAt(i);
+
+      if (c == '<') {
+        if (i + 1 == length) {
+          return new ScriptScan(ScriptScan.PENDING, i, state);
+        }
+
+        char next = chunk.charAt(i + 1);
+        if (state == ConvertState.SCRIPT_DATA) {
+          if (next == '/') {
+            int end = scriptSequenceEnd(chunk, i + 2);
+            if (end >= 0) {
+              return new ScriptScan(ScriptScan.CLOSE, i, state);
+            }
+            if (end == SCRIPT_SEQUENCE_INCOMPLETE) {
+              return new ScriptScan(ScriptScan.PENDING, i, state);
+            }
+          } else if (next == '!') {
+            int available = Math.min(length - i, 4);
+            if (chunk.regionMatches(i, "<!--", 0, available)) {
+              if (available < 4) {
+                return new ScriptScan(ScriptScan.PENDING, i, state);
+              }
+              state = ConvertState.SCRIPT_DATA_ESCAPED_DASH_DASH;
+              i += 4;
+              continue;
+            }
+          }
+        } else {
+          boolean escaped = state < ConvertState.SCRIPT_DATA_DOUBLE_ESCAPED;
+          state =
+              escaped
+                  ? ConvertState.SCRIPT_DATA_ESCAPED
+                  : ConvertState.SCRIPT_DATA_DOUBLE_ESCAPED;
+          boolean isEndTag = next == '/';
+
+          if (isEndTag || escaped) {
+            int end = scriptSequenceEnd(chunk, i + (isEndTag ? 2 : 1));
+            if (end >= 0) {
+              if (isEndTag) {
+                if (escaped) {
+                  return new ScriptScan(ScriptScan.CLOSE, i, state);
+                }
+                state = ConvertState.SCRIPT_DATA_ESCAPED;
+              } else {
+                state = ConvertState.SCRIPT_DATA_DOUBLE_ESCAPED;
+              }
+              i = end;
+              continue;
+            }
+            if (end == SCRIPT_SEQUENCE_INCOMPLETE) {
+              return new ScriptScan(ScriptScan.PENDING, i, state);
+            }
+          }
+        }
+      } else {
+        switch (state) {
+          case ConvertState.SCRIPT_DATA_ESCAPED:
+            if (c == '-') {
+              state = ConvertState.SCRIPT_DATA_ESCAPED_DASH;
+            }
+            break;
+          case ConvertState.SCRIPT_DATA_ESCAPED_DASH:
+            if (c == '-') {
+              state = ConvertState.SCRIPT_DATA_ESCAPED_DASH_DASH;
+            } else {
+              state = ConvertState.SCRIPT_DATA_ESCAPED;
+            }
+            break;
+          case ConvertState.SCRIPT_DATA_ESCAPED_DASH_DASH:
+            if (c == '>') {
+              state = ConvertState.SCRIPT_DATA;
+            } else if (c != '-') {
+              state = ConvertState.SCRIPT_DATA_ESCAPED;
+            }
+            break;
+          case ConvertState.SCRIPT_DATA_DOUBLE_ESCAPED:
+            if (c == '-') {
+              state = ConvertState.SCRIPT_DATA_DOUBLE_ESCAPED_DASH;
+            }
+            break;
+          case ConvertState.SCRIPT_DATA_DOUBLE_ESCAPED_DASH:
+            if (c == '-') {
+              state = ConvertState.SCRIPT_DATA_DOUBLE_ESCAPED_DASH_DASH;
+            } else {
+              state = ConvertState.SCRIPT_DATA_DOUBLE_ESCAPED;
+            }
+            break;
+          case ConvertState.SCRIPT_DATA_DOUBLE_ESCAPED_DASH_DASH:
+            if (c == '>') {
+              state = ConvertState.SCRIPT_DATA;
+            } else if (c != '-') {
+              state = ConvertState.SCRIPT_DATA_DOUBLE_ESCAPED;
+            }
+            break;
+          default:
+            break;
+        }
+      }
+
+      i++;
+    }
+
+    return new ScriptScan(ScriptScan.COMPLETE, length, state);
+  }
+
+  /**
+   * Scans script data from {@code start}.
+   *
+   * <p>Returns the index of the close tag's {@code <} and resets the tokenizer state, or a
+   * negative {@code -(carryFrom + 1)} when the chunk ended inside script data and the raw tail
+   * from {@code carryFrom} must be carried into the next chunk.
+   */
+  private static int processScriptChunk(ConvertState self, String chunk, int start) {
+    ScriptScan scan = findScriptEndTag(chunk, start, self.scriptDataState);
+    self.scriptDataState = scan.state;
+    if (scan.boundary == ScriptScan.CLOSE) {
+      pushScriptText(self, chunk.substring(start, scan.index));
+      flushScriptText(self);
+      self.scriptDataState = ConvertState.SCRIPT_DATA;
+      return scan.index;
+    }
+    pushScriptText(self, chunk.substring(start, scan.index));
+    int carryFrom = scan.boundary == ScriptScan.PENDING ? scan.index : chunk.length();
+    return -(carryFrom + 1);
   }
 
   static boolean pushCappedTextNode(
