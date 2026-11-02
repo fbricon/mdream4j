@@ -932,7 +932,7 @@ final class OutputOps {
         && output != null
         && !output.isEmpty()
         && self.buffer.length() > outputStart
-        && self.buffer.toString().endsWith(output)) {
+        && endsWith(self.buffer, output)) {
       ConvertState.OpenMarker marker = new ConvertState.OpenMarker();
       marker.outputStart = self.buffer.length() - output.length();
       marker.contentStart = self.buffer.length();
@@ -992,8 +992,7 @@ final class OutputOps {
       return;
     }
     if (outputStart <= self.buffer.length()) {
-      String content = self.buffer.substring(outputStart);
-      if (Chars.hasVisible(content)) {
+      if (Chars.hasVisible(self.buffer, outputStart, self.buffer.length())) {
         self.link.emptyTextPending = false;
       }
     }
