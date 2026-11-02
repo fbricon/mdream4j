@@ -152,6 +152,7 @@ final class ConvertState {
   LinkOutputState link = new LinkOutputState();
   final List<OpenMarker> openMarkers = new ArrayList<>();
   final List<CodeSpanState> codeSpans = new ArrayList<>();
+  final List<StreamingBreakRun> streamingBreakRuns = new ArrayList<>();
   CodeFenceState codeFence;
   final List<BlockquoteFrame> blockquotes = new ArrayList<>(4);
   int blockquoteLineScannedTo;
@@ -710,6 +711,17 @@ final class ConvertState {
     int contentStart;
     String indent;
     String language;
+  }
+
+  /**
+   * A run of identical whitespace fragments a streaming {@code <br>} wrote once and counted, so a
+   * long run costs one copy until it is expanded on the way out.
+   */
+  static final class StreamingBreakRun {
+    int outputStart;
+    int outputEnd;
+    String unit;
+    int count;
   }
 
   static final class BlockquoteFrame {

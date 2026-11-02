@@ -3077,6 +3077,53 @@ final class OutputOps {
     return true;
   }
 
+  /**
+   * Hold a repeated whitespace {@code <br>} fragment instead of growing the buffer.
+   *
+   * <p>The byte count is kept in one-shot conversion too, so the cap cuts both at the same tag.
+   * While streaming, consecutive identical fragments collapse into one copy plus a count that is
+   * expanded when the run is yielded.
+   */
+  private static boolean deferStreamingBreak(ConvertState self, String fragment) {
+    if (!self.blockquotes.isEmpty()
+        || self.retainsWholeDocument()
+        || self.depthMap[Consts.TAG_PRE] != 0
+        || self.depthMap[Consts.TAG_CODE] != 0) {
+      return false;
+    }
+    if (fragment.isEmpty()) {
+      return false;
+    }
+    self.heldBreakBytes += Scan.utf8Length(fragment);
+    if (!self.streaming) {
+      return false;
+    }
+    ConvertState.StreamingBreakRun last =
+        self.streamingBreakRuns.isEmpty()
+            ? null
+            : self.streamingBreakRuns.get(self.streamingBreakRuns.size() - 1);
+    if (last != null
+        && last.outputEnd == self.buffer.length()
+        && last.unit.equals(fragment)
+        && self.buffer.substring(last.outputStart, last.outputEnd).equals(fragment)) {
+      last.count++;
+      self.lastContentCacheLen = fragment.length();
+      return true;
+    }
+
+    int outputStart = self.buffer.length();
+    writeOutput(self, true, true, 0, fragment, false);
+    if (self.buffer.length() == outputStart + fragment.length()) {
+      ConvertState.StreamingBreakRun run = new ConvertState.StreamingBreakRun();
+      run.outputStart = outputStart;
+      run.outputEnd = self.buffer.length();
+      run.unit = fragment;
+      run.count = 1;
+      self.streamingBreakRuns.add(run);
+    }
+    return true;
+  }
+
   private static void writeDeferredBreakRun(ConvertState self, ConvertState.DeferredBreakRun run) {
     if (run == null) {
       return;
@@ -3774,6 +3821,20 @@ final class OutputOps {
         }
       }
     }
+    if (!self.plainText
+        && !enterIsLiteral
+        && tagId == Consts.TAG_BR
+        && configuredNewLines == 0
+        && output != null
+        && !output.isEmpty()
+        && !Chars.hasVisible(output)
+        && deferStreamingBreak(self, output)) {
+      self.pendingInlineWhitespace = false;
+      self.lastTextNodeContainsWhitespace = false;
+      self.hasLastTextNode = false;
+      self.lastNodeIsInline = node.isInline;
+      return;
+    }
 
     if (tagId == Consts.TAG_LI && !self.plainText && !self.inTableCell()) {
       self.listRulePending = false;
@@ -4376,6 +4437,14 @@ final class OutputOps {
         marker.contentStart += amount;
       }
     }
+    for (ConvertState.StreamingBreakRun run : self.streamingBreakRuns) {
+      if (run.outputStart >= at) {
+        run.outputStart += amount;
+      }
+      if (run.outputEnd >= at) {
+        run.outputEnd += amount;
+      }
+    }
     for (ConvertState.CodeSpanState span : self.codeSpans) {
       if (span.outputStart >= at) {
         span.outputStart += amount;
@@ -4490,10 +4559,12 @@ final class OutputOps {
     return floor == Integer.MAX_VALUE ? -1 : floor;
   }
 
-  /** Records the link bookkeeping that only streaming needs. */
+  /** Records the link bookkeeping that streaming and the node cap need. */
   static void prepareStreamingLink(
       ConvertState self, ElementNode node, boolean rewriteAnchor) {
-    if (!self.streaming) {
+    // Avoid the href lookup and hold bookkeeping for one-shot conversion, unless
+    // `maxNodeBytes` has to charge what the link holds back.
+    if (!self.streaming && self.maxNodeBytes == 0) {
       return;
     }
     String href = node.attributes.getBit(Consts.ATTR_HREF);
@@ -4507,6 +4578,9 @@ final class OutputOps {
     self.link.pinsOutput = pinsOutput;
     self.link.emptyTextPending =
         rewriteAnchor && (self.cleanFlags & ConvertState.CLEAN_EMPTY_LINK_TEXT) != 0;
+    if (!self.streaming) {
+      return;
+    }
     self.link.holdForever = pinsOutput;
     self.link.holdReleased = !rewriteAnchor;
     int originLen = self.origin == null ? 0 : self.origin.length();
@@ -4595,6 +4669,24 @@ final class OutputOps {
       stableEnd = run;
     }
 
+    if (!self.streamingBreakRuns.isEmpty()) {
+      // A run is final once content follows it. Find the last content byte once: rescanning the
+      // tail after every run cost the square of a long run of breaks separated by whitespace.
+      int contentEnd = -1;
+      for (int i = stableEnd - 1; i >= 0; i--) {
+        if (!Chars.isAsciiWhitespace(self.buffer.charAt(i))) {
+          contentEnd = i;
+          break;
+        }
+      }
+      for (ConvertState.StreamingBreakRun run : self.streamingBreakRuns) {
+        if (run.outputEnd > stableEnd || contentEnd < run.outputEnd) {
+          stableEnd = Math.min(stableEnd, run.outputStart);
+          break;
+        }
+      }
+    }
+
     int start = Math.max(self.lastYieldedLength, leading);
     while (stableEnd > start && splitsSurrogatePair(self.buffer, stableEnd)) {
       stableEnd--;
@@ -4606,7 +4698,36 @@ final class OutputOps {
       drainStreamedPrefix(self);
       return "";
     }
-    String out = self.buffer.substring(start, stableEnd);
+    String out;
+    int extraLen = 0;
+    for (ConvertState.StreamingBreakRun run : self.streamingBreakRuns) {
+      if (run.outputStart >= start && run.outputEnd <= stableEnd) {
+        extraLen += run.unit.length() * (run.count - 1);
+      }
+    }
+    if (extraLen == 0) {
+      out = self.buffer.substring(start, stableEnd);
+    } else {
+      StringBuilder expanded = new StringBuilder(stableEnd - start + extraLen);
+      int cursor = start;
+      for (ConvertState.StreamingBreakRun run : self.streamingBreakRuns) {
+        if (run.outputStart < start || run.outputEnd > stableEnd) {
+          continue;
+        }
+        expanded.append(self.buffer, cursor, run.outputStart);
+        for (int copy = 1; copy < run.count; copy++) {
+          expanded.append(run.unit);
+        }
+        cursor = run.outputStart;
+      }
+      expanded.append(self.buffer, cursor, stableEnd);
+      out = expanded.toString();
+    }
+    for (int i = self.streamingBreakRuns.size() - 1; i >= 0; i--) {
+      if (self.streamingBreakRuns.get(i).outputEnd <= stableEnd) {
+        self.streamingBreakRuns.remove(i);
+      }
+    }
     self.hasStreamedOutput = true;
     self.lastYieldedLength = stableEnd;
     if (self.link.open && stableEnd > self.link.bracketPos) {
@@ -4731,6 +4852,10 @@ final class OutputOps {
         frame.tentativeOutputStart -= drainEnd;
         frame.tentativeContentStart -= drainEnd;
       }
+    }
+    for (ConvertState.StreamingBreakRun run : self.streamingBreakRuns) {
+      run.outputStart -= drainEnd;
+      run.outputEnd -= drainEnd;
     }
     for (ConvertState.CodeSpanState span : self.codeSpans) {
       span.outputStart -= drainEnd;
@@ -4986,6 +5111,33 @@ final class OutputOps {
   }
 
   /**
+   * Write every copy a collapsed streaming {@code <br>} run stands for, then forget the runs.
+   * Mirrors the expansion in {@code get_markdown}.
+   */
+  private static void expandStreamingBreakRuns(ConvertState self) {
+    if (self.streamingBreakRuns.isEmpty()) {
+      return;
+    }
+    int extraLen = 0;
+    for (ConvertState.StreamingBreakRun run : self.streamingBreakRuns) {
+      extraLen += run.unit.length() * (run.count - 1);
+    }
+    StringBuilder expanded = new StringBuilder(self.buffer.length() + extraLen);
+    int cursor = 0;
+    for (ConvertState.StreamingBreakRun run : self.streamingBreakRuns) {
+      expanded.append(self.buffer, cursor, run.outputStart);
+      for (int copy = 1; copy < run.count; copy++) {
+        expanded.append(run.unit);
+      }
+      cursor = run.outputStart;
+    }
+    expanded.append(self.buffer, cursor, self.buffer.length());
+    self.streamingBreakRuns.clear();
+    self.buffer.setLength(0);
+    self.buffer.append(expanded);
+  }
+
+  /**
    * Final output: trailing ASCII whitespace, then leading whitespace unless it is content.
    * Mirrors {@code get_markdown} in {@code convert/mod.rs}.
    */
@@ -5008,11 +5160,21 @@ final class OutputOps {
       if (start > 0) {
         self.buffer.delete(0, start);
         noteBufferDrain(self, start);
+        for (int i = self.streamingBreakRuns.size() - 1; i >= 0; i--) {
+          if (self.streamingBreakRuns.get(i).outputEnd <= start) {
+            self.streamingBreakRuns.remove(i);
+          }
+        }
+        for (ConvertState.StreamingBreakRun run : self.streamingBreakRuns) {
+          run.outputStart = Math.max(0, run.outputStart - start);
+          run.outputEnd -= start;
+        }
       }
     }
     if ((self.cleanFlags & ConvertState.CLEAN_FRAGMENTS) != 0 && !self.fragmentLinks.isEmpty()) {
       applyFragmentRemovals(self, start);
     }
+    expandStreamingBreakRuns(self);
     String out = self.buffer.toString();
     self.buffer.setLength(0);
     return out;
