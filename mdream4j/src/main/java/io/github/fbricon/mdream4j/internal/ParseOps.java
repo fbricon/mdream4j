@@ -2221,25 +2221,22 @@ final class ParseOps {
       char next = chunk.charAt(i + 1);
 
       if (next == '!') {
-        String remaining = chunk.substring(i);
         // CDATA is dropped by default but can be surfaced via a #cdata-section
         // override. Handle it before the generic comment/doctype scan, which
         // would otherwise stop at the first `>` inside `]]>`.
-        String cdataAfterOpen =
-            i + 2 <= chunkLength ? chunk.substring(i + 2) : "";
-        if (cdataAfterOpen.startsWith("[CDATA[")) {
-          String afterOpen = cdataAfterOpen.substring(7);
-          int rel = afterOpen.indexOf("]]>");
-          if (rel >= 0) {
-            int tokenLen = 9 + rel + 3;
+        boolean cdata = Chars.startsWith(chunk, i + 2, "[CDATA[");
+        if (cdata) {
+          int cdataEnd = chunk.indexOf("]]>", i + 9);
+          if (cdataEnd >= 0) {
+            int tokenLen = cdataEnd + 3 - i;
             completeTextNode(self, textBuffer);
             runStart = i;
             if (maxNodeBytes == 0 || tokenLen <= maxNodeBytes) {
-              processCdataSection(self, afterOpen.substring(0, rel));
+              processCdataSection(self, chunk.substring(i + 9, cdataEnd));
             } else if (hasSurfacedCdata(self)) {
               self.truncated = true;
             }
-            i += tokenLen;
+            i = cdataEnd + 3;
             continue;
           }
           if (hasSurfacedCdata(self)) {
@@ -2247,7 +2244,7 @@ final class ParseOps {
             carry = true;
             break;
           }
-        } else if (remaining.length() < 9 && "<![CDATA[".startsWith(remaining)) {
+        } else if (chunkLength - i < 9 && Chars.tailIsPrefixOf("<![CDATA[", chunk, i)) {
           runStart = i;
           carry = true;
           carryBounded = true;
@@ -2255,19 +2252,19 @@ final class ParseOps {
         }
         completeTextNode(self, textBuffer);
         runStart = i;
-        if (cdataAfterOpen.startsWith("[CDATA[")) {
-          discardDeclaration(self, remaining);
+        if (cdata) {
+          discardDeclaration(self, chunk.substring(i));
           break;
         }
         Scan.CommentResult result = Scan.processCommentOrDoctype(chunk, i);
         if (result.complete) {
           i = result.newPosition;
-        } else if (remaining.length() < 4 && "<!--".startsWith(remaining)) {
+        } else if (chunkLength - i < 4 && Chars.tailIsPrefixOf("<!--", chunk, i)) {
           carry = true;
           carryBounded = true;
           break;
         } else {
-          discardDeclaration(self, remaining);
+          discardDeclaration(self, chunk.substring(i));
           break;
         }
       } else if (next == '/') {
@@ -2285,12 +2282,12 @@ final class ParseOps {
       } else if (next == '?') {
         completeTextNode(self, textBuffer);
         runStart = i;
-        int end = Scan.discardedGt(chunk.substring(i));
+        int end = chunk.indexOf('>', i);
         if (end < 0) {
           discardDeclaration(self, chunk.substring(i));
           break;
         }
-        i += end;
+        i = end + 1;
       } else if (!Chars.isAsciiAlphabetic(next)) {
         int beforeLen = textBuffer.length();
         self.truncated |= pushCappedTextNode(textBuffer, "<", maxNodeBytes, self);

@@ -137,6 +137,20 @@ final class Chars {
     return false;
   }
 
+  /** Whether {@code value[start, value.length())} is a prefix of {@code expected}. */
+  static boolean tailIsPrefixOf(CharSequence expected, CharSequence value, int start) {
+    int length = value.length() - start;
+    if (start < 0 || length < 0 || length > expected.length()) {
+      return false;
+    }
+    for (int i = 0; i < length; i++) {
+      if (value.charAt(start + i) != expected.charAt(i)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /** Whether {@code value} starts with {@code expected} at {@code start}. */
   static boolean startsWith(CharSequence value, int start, CharSequence expected) {
     return regionEquals(value, start, start + expected.length(), expected);
