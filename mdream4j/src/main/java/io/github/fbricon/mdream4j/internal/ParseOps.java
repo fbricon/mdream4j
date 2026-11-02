@@ -980,8 +980,11 @@ final class ParseOps {
 
     if (tagId == Consts.TAG_OL) {
       String startValue = tag.attributes.getBit(Consts.ATTR_START);
-      Integer start = startValue == null ? null : parseBoundedU32(startValue, ConvertState.MAX_ORDERED_START);
-      self.orderedStarts.add(start);
+      Long parsedStart =
+          startValue == null
+              ? null
+              : parseBoundedU32(startValue, ConvertState.MAX_ORDERED_START);
+      self.orderedStarts.add(parsedStart == null ? null : parsedStart.intValue());
       self.listItemCounts.add(0);
     } else if (tagId == Consts.TAG_UL) {
       self.listItemCounts.add(0);
@@ -1106,22 +1109,35 @@ final class ParseOps {
     return name == null ? "" : name;
   }
 
-  static Integer parseBoundedU32(String value, int max) {
-    if (value.isEmpty()) {
+  static Long parseBoundedU32(String value, long max) {
+    int start = 0;
+    int end = value.length();
+    while (start < end && Chars.isAsciiWhitespace(value.charAt(start))) {
+      start++;
+    }
+    while (end > start && Chars.isAsciiWhitespace(value.charAt(end - 1))) {
+      end--;
+    }
+    int index = start;
+    if (index < end && value.charAt(index) == '+') {
+      index++;
+    }
+    if (index == end) {
       return null;
     }
     long parsed = 0;
-    for (int i = 0; i < value.length(); i++) {
-      char c = value.charAt(i);
+    while (index < end) {
+      char c = value.charAt(index);
       if (c < '0' || c > '9') {
         return null;
       }
       parsed = parsed * 10 + (c - '0');
       if (parsed > max) {
-        return max;
+        return null;
       }
+      index++;
     }
-    return (int) parsed;
+    return parsed;
   }
 
   private static void captureBaseHref(ConvertState self) {

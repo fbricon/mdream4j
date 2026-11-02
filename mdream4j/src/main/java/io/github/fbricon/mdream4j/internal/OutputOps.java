@@ -857,6 +857,10 @@ final class OutputOps {
 
   static void emitText(
       ConvertState self, String text, boolean containsWhitespace, int depth, int index) {
+    if (self.htmlFormat) {
+      HtmlOutputOps.emitHtmlText(self, text);
+      return;
+    }
     boolean hazard = false;
     for (int i = 0; i < text.length(); i++) {
       char c = text.charAt(i);
@@ -910,6 +914,10 @@ final class OutputOps {
       int index,
       String generatedPrefix,
       String generatedSuffix) {
+    if (self.htmlFormat) {
+      HtmlOutputOps.emitHtmlText(self, text);
+      return;
+    }
     if (self.pendingRawHtmlBoundary) {
       finishRawHtmlBlock(self, text, true);
       if (!self.pendingRawHtmlBoundary) {
@@ -1631,7 +1639,7 @@ final class OutputOps {
         }
       case Consts.TAG_A:
         if (self.inRawHtmlBlock()) {
-          return htmlElementOutput(self, node, true, true);
+          return HtmlOutputOps.htmlElementOutput(self, node, true, true);
         }
         return node.attributes.containsBit(Consts.ATTR_HREF) ? "[" : null;
       case Consts.TAG_IMG:
@@ -1766,7 +1774,7 @@ final class OutputOps {
         return "</ins>";
       case Consts.TAG_A:
         if (self.inRawHtmlBlock()) {
-          return htmlElementOutput(self, node, false, true);
+          return HtmlOutputOps.htmlElementOutput(self, node, false, true);
         }
         return null;
       case Consts.TAG_CODE:
@@ -1909,7 +1917,7 @@ final class OutputOps {
     return out.toString();
   }
 
-  private static boolean suppressesFormattingInPre(int tagId) {
+  static boolean suppressesFormattingInPre(int tagId) {
     return tagId == Consts.TAG_A
         || tagId == Consts.TAG_KBD
         || tagId == Consts.TAG_S
@@ -1984,8 +1992,8 @@ final class OutputOps {
     if (value == null) {
       return 1;
     }
-    Integer parsed = ParseOps.parseBoundedU32(value, 255);
-    return parsed == null ? 1 : Math.max(1, Math.min(parsed, 16));
+    Long parsed = ParseOps.parseBoundedU32(value, 255);
+    return parsed == null ? 1 : (int) Math.max(1, Math.min(parsed, 16));
   }
 
   // === Write ===
@@ -2985,6 +2993,10 @@ final class OutputOps {
       self.lastNodeIsInline = node.isInline;
       return;
     }
+    if (self.htmlFormat) {
+      HtmlOutputOps.emitHtmlEnter(self);
+      return;
+    }
     if (self.listRulePending && !node.excludesTextNodes) {
       flushListRule(self);
     }
@@ -3358,6 +3370,11 @@ final class OutputOps {
       self.lastNodeIsInline = isInline;
       return;
     }
+    if (self.htmlFormat) {
+      HtmlOutputOps.emitHtmlExit(self, node);
+      self.lastNodeIsInline = isInline;
+      return;
+    }
     boolean ownsPreFence = tagId == Consts.TAG_PRE;
     boolean closesOwnPreFence =
         tagId == Consts.TAG_PRE && self.preFenceOwnerDepth == self.depthMap[Consts.TAG_PRE];
@@ -3618,199 +3635,6 @@ final class OutputOps {
   private static int[] effectiveSpacing(ElementNode node, TagOverride override) {
     int[] nodeSpacing = override != null ? spacingOverride(override) : null;
     return nodeSpacing != null ? nodeSpacing : node.spacing;
-  }
-
-  private static String htmlElementOutput(
-      ConvertState self, ElementNode node, boolean enter, boolean protectMarkdown) {
-    int tagId = node.tagId;
-    if (tagId < 0) {
-      return null;
-    }
-    String name = htmlTagName(tagId);
-    if (name == null) {
-      return null;
-    }
-    if (!enter) {
-      if (tagId == Consts.TAG_A) {
-        String href = node.attributes.getBit(Consts.ATTR_HREF);
-        if (href == null || resolveHtmlUrl(self, href, false) == null) {
-          return null;
-        }
-      }
-      return "</" + name + ">";
-    }
-
-    StringBuilder output = new StringBuilder(name.length() + 24);
-    output.append('<').append(name);
-    switch (tagId) {
-      case Consts.TAG_A:
-        {
-          String href = node.attributes.getBit(Consts.ATTR_HREF);
-          if (href == null) {
-            return null;
-          }
-          String resolved = resolveHtmlUrl(self, href, false);
-          if (resolved == null) {
-            return null;
-          }
-          output.append(" href=\"");
-          if (protectMarkdown) {
-            pushRawAnchorAttribute(output, resolved);
-          } else {
-            pushEscaped(output, resolved, true);
-          }
-          output.append('"');
-          String title = node.attributes.getBit(Consts.ATTR_TITLE);
-          if (title != null) {
-            output.append(" title=\"");
-            if (protectMarkdown) {
-              pushRawAnchorAttribute(output, title);
-            } else {
-              pushEscaped(output, title, true);
-            }
-            output.append('"');
-          }
-          break;
-        }
-      case Consts.TAG_OL:
-        {
-          String value = node.attributes.getBit(Consts.ATTR_START);
-          Integer start =
-              value == null ? null : ParseOps.parseBoundedU32(value, Integer.MAX_VALUE);
-          if (start != null) {
-            output.append(" start=\"").append(start).append('"');
-          }
-          break;
-        }
-      case Consts.TAG_CODE:
-        {
-          String language = getLanguageFromAttributes(node);
-          if (!language.isEmpty()) {
-            output.append(" class=\"language-");
-            pushEscaped(output, language, true);
-            output.append('"');
-          }
-          break;
-        }
-      case Consts.TAG_TH:
-      case Consts.TAG_TD:
-        {
-          String value = node.attributes.getBit(Consts.ATTR_COLSPAN);
-          Integer colspan =
-              value == null ? null : ParseOps.parseBoundedU32(value, Integer.MAX_VALUE);
-          if (colspan != null && colspan > 0) {
-            output.append(" colspan=\"").append(colspan).append('"');
-          }
-          if (tagId == Consts.TAG_TH) {
-            String align = node.attributes.getBit(Consts.ATTR_ALIGN);
-            if (align != null) {
-              String normalized = "";
-              if (Chars.asciiEqualsIgnoreCase(align, "left")) {
-                normalized = "left";
-              } else if (Chars.asciiEqualsIgnoreCase(align, "center")) {
-                normalized = "center";
-              } else if (Chars.asciiEqualsIgnoreCase(align, "right")) {
-                normalized = "right";
-              }
-              if (!normalized.isEmpty()) {
-                output.append(" align=\"").append(normalized).append('"');
-              }
-            }
-          }
-          break;
-        }
-      default:
-        break;
-    }
-    output.append('>');
-    return output.toString();
-  }
-
-  private static String htmlTagName(int tagId) {
-    switch (tagId) {
-      case Consts.TAG_B:
-        return "strong";
-      case Consts.TAG_I:
-        return "em";
-      case Consts.TAG_S:
-      case Consts.TAG_STRIKE:
-        return "del";
-      default:
-        break;
-    }
-    boolean safe =
-        tagId == Consts.TAG_DETAILS
-            || tagId == Consts.TAG_SUMMARY
-            || (tagId >= Consts.TAG_H1 && tagId <= Consts.TAG_A)
-            || (tagId >= Consts.TAG_TABLE && tagId <= Consts.TAG_TFOOT)
-            || tagId == Consts.TAG_NAV
-            || tagId == Consts.TAG_KBD
-            || tagId == Consts.TAG_FOOTER
-            || tagId == Consts.TAG_ARTICLE
-            || tagId == Consts.TAG_SECTION
-            || (tagId >= Consts.TAG_ABBR && tagId <= Consts.TAG_SMALL)
-            || (tagId >= Consts.TAG_ASIDE && tagId <= Consts.TAG_TIME)
-            || (tagId >= Consts.TAG_RUBY && tagId <= Consts.TAG_FIGURE)
-            || (tagId >= Consts.TAG_MAIN && tagId <= Consts.TAG_CAPTION);
-    return safe ? Consts.TAG_NAMES[tagId] : null;
-  }
-
-  private static String resolveHtmlUrl(ConvertState self, String url, boolean image) {
-    if (!Url.isSafeHtmlUrl(url, image)) {
-      return null;
-    }
-    String resolved = Url.resolveUrl(url, self.origin, self.cleanUrls);
-    return Url.isSafeHtmlUrl(resolved, image) ? resolved : null;
-  }
-
-  private static void pushEscaped(StringBuilder output, String value, boolean attribute) {
-    pushEscapedInner(output, value, attribute, false);
-  }
-
-  private static void pushRawAnchorAttribute(StringBuilder output, String value) {
-    pushEscapedInner(output, value, true, true);
-  }
-
-  private static void pushEscapedInner(
-      StringBuilder output, String value, boolean attribute, boolean escapeBrackets) {
-    for (int i = 0; i < value.length(); i++) {
-      char c = value.charAt(i);
-      switch (c) {
-        case '&':
-          output.append("&amp;");
-          break;
-        case '<':
-          output.append("&lt;");
-          break;
-        case '>':
-          output.append("&gt;");
-          break;
-        case '"':
-          if (attribute) {
-            output.append("&quot;");
-          } else {
-            output.append(c);
-          }
-          break;
-        case '[':
-          if (escapeBrackets) {
-            output.append("&#91;");
-          } else {
-            output.append(c);
-          }
-          break;
-        case ']':
-          if (escapeBrackets) {
-            output.append("&#93;");
-          } else {
-            output.append(c);
-          }
-          break;
-        default:
-          output.append(c);
-          break;
-      }
-    }
   }
 
   // === Empty item guard ===

@@ -182,6 +182,7 @@ final class ConvertState {
   int captionBoundary;
   int captionBoundaryNewLines;
   final List<CaptionFrame> captionFrames = new ArrayList<>(2);
+  final List<HtmlFrame> htmlFrames = new ArrayList<>(4);
 
   int lastYieldedLength;
   boolean hasStreamedOutput;
@@ -697,6 +698,24 @@ final class ConvertState {
   static final class DeferredBreakRun {
     String fragment;
     int count;
+  }
+
+  static final int HTML_FRAME_HEADING = 0;
+  static final int HTML_FRAME_PRE = 1;
+
+  /** A heading or preformatted block buffered separately from the main output. */
+  static final class HtmlFrame {
+    final int kind;
+    int level;
+    int depth;
+    String language = "";
+    boolean languagePending;
+    final StringBuilder output = new StringBuilder();
+    final StringBuilder text = new StringBuilder();
+
+    HtmlFrame(int kind) {
+      this.kind = kind;
+    }
   }
 
   static final class FragmentLink {
