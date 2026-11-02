@@ -1967,6 +1967,12 @@ final class OutputOps {
         if (self.inRawHtmlBlock()) {
           return "</code>";
         }
+        if (!self.codeSpans.isEmpty()
+            && self.codeSpans.get(self.codeSpans.size() - 1).depth != node.depth) {
+          // Code inside a code span is part of it: a nested <code> adds no
+          // delimiter of its own.
+          return null;
+        }
         return Consts.MARKDOWN_INLINE_CODE;
       case Consts.TAG_PRE:
         if (self.inTableCell()) {
