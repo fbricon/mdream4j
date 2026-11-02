@@ -137,5 +137,11 @@
         <module>mdream4j-reference</module>
       </modules>
     </profile>
+    <profile>
+      <id>with-bench</id>
+      <modules>
+        <module>mdream4j-bench</module>
+      </modules>
+    </profile>
   </profiles>
 </project>

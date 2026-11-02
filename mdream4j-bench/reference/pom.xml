@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.github.fbricon</groupId>
+    <artifactId>mdream4j-bench-contender-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../bench-parent/pom.xml</relativePath>
+  </parent>
+
+  <artifactId>mdream4j-bench-reference</artifactId>
+  <name>upstream mdream through the Rust reference bridge</name>
+
+  <properties>
+    <!-- The FFM bridge requires Java 25. -->
+    <maven.compiler.release>25</maven.compiler.release>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.github.fbricon</groupId>
+      <artifactId>mdream4j-reference</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+  </dependencies>
+</project>

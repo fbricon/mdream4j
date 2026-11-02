@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.github.fbricon</groupId>
+    <artifactId>mdream4j-bench-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>mdream4j-bench-support</artifactId>
+  <name>mdream4j benchmark support</name>
+  <description>Shared fixtures, digest checks and the JMH base class. Never published.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.openjdk.jmh</groupId>
+      <artifactId>jmh-core</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>fixtures-present</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireFilesExist>
+                  <message>
+                    The benchmark fixtures live in the pinned tools/upstream submodule.
+                    Run: git submodule update --init --depth 1 tools/upstream
+                  </message>
+                  <files>
+                    <file>${maven.multiModuleProjectDirectory}/tools/upstream/crates/core/tests/fixtures/nuxt-example.html</file>
+                    <file>${maven.multiModuleProjectDirectory}/tools/upstream/crates/node/test/fixtures/wikipedia-largest.html</file>
+                  </files>
+                </requireFilesExist>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-fixtures</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.outputDirectory}/fixtures</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${maven.multiModuleProjectDirectory}/tools/upstream/crates/core/tests/fixtures</directory>
+                  <includes>
+                    <include>nuxt-example.html</include>
+                    <include>vuejs-docs.html</include>
+                    <include>wikipedia-small.html</include>
+                    <include>mdn-array.html</include>
+                    <include>react-learn.html</include>
+                    <include>github-markdown-complete.html</include>
+                  </includes>
+                </resource>
+                <resource>
+                  <directory>${maven.multiModuleProjectDirectory}/tools/upstream/crates/node/test/fixtures</directory>
+                  <includes>
+                    <include>wikipedia-largest.html</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

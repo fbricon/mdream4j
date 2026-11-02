@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.github.fbricon</groupId>
+    <artifactId>mdream4j-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>mdream4j-bench-parent</artifactId>
+  <packaging>pom</packaging>
+  <name>mdream4j benchmarks</name>
+  <description>JMH benchmarks for mdream4j and its contenders. Never published.</description>
+
+  <properties>
+    <maven.deploy.skip>true</maven.deploy.skip>
+    <maven.install.skip>true</maven.install.skip>
+    <jmh.version>1.37</jmh.version>
+    <flexmark.version>0.64.8</flexmark.version>
+    <remark.version>1.2.0</remark.version>
+    <copy-down.version>1.1</copy-down.version>
+    <xberg.version>3.19.1</xberg.version>
+    <jsoup.published.version>1.15.4</jsoup.published.version>
+    <jsoup.patched.version>1.23.2</jsoup.patched.version>
+    <jsoup.remark.version>1.9.2</jsoup.remark.version>
+  </properties>
+
+  <modules>
+    <module>support</module>
+    <module>bench-parent</module>
+    <module>mdream4j</module>
+    <module>flexmark-published</module>
+    <module>flexmark-patched</module>
+    <module>remark</module>
+    <module>copy-down</module>
+    <module>jsoup</module>
+  </modules>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.openjdk.jmh</groupId>
+        <artifactId>jmh-core</artifactId>
+        <version>${jmh.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openjdk.jmh</groupId>
+        <artifactId>jmh-generator-annprocess</artifactId>
+        <version>${jmh.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.fbricon</groupId>
+        <artifactId>mdream4j-bench-support</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>3.3.1</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+  <profiles>
+    <!-- xberg ships Java 25 bytecode and loads a native library through FFM. -->
+    <profile>
+      <id>jdk25</id>
+      <activation>
+        <jdk>[25,)</jdk>
+      </activation>
+      <modules>
+        <module>xberg</module>
+      </modules>
+    </profile>
+    <!-- The Rust baseline needs the FFM reference bridge, so Java 25 too. -->
+    <profile>
+      <id>with-reference</id>
+      <modules>
+        <module>reference</module>
+      </modules>
+    </profile>
+  </profiles>
+</project>
