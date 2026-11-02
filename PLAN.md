@@ -20,7 +20,7 @@ the library must expose so that lemminx and eclipse.jdt.ls can migrate on their 
 ## 1. TL;DR
 
 **Build a pure-Java port of mdream's Rust core. Target Java 11 bytecode. Keep it
-native-image-clean. Use FFM only as a test oracle.**
+native-image-clean. Use FFM only for a test-only reference bridge.**
 
 The new constraints settle the architecture:
 
@@ -61,7 +61,7 @@ FFM is now **structurally excluded**, not merely disfavoured:
    streaming, no `module-info`, no Android. That is the shape of the competition, and it is a
    shape we should not copy.
 
-**FFM survives only as `mdream4j-oracle`** — a test-scope Rust `cdylib` + Java bridge used to
+**FFM survives only as `mdream4j-reference`** — a test-scope Rust `cdylib` + Java bridge used to
 prove byte equality and to benchmark "OG mdream" in-process. It is never published.
 
 ---
@@ -127,7 +127,7 @@ Consequences for the API:
   landed in 9. The `char[]` design (§5.2) is unaffected.
 - **Test matrix:** Temurin 11, 17, 21, 25. Benchmarks are reported on **11 (the floor) and 25**,
   because C2 differs and the consumer runs on 11.
-- The **oracle module** compiles with `--release 25` and is only built under `-Pwith-oracle`.
+- The **reference module** compiles with `--release 25` and is only built under `-Pwith-reference`.
   The library module must never see `java.lang.foreign`.
 
 ### 4.2 GraalVM native-image
@@ -195,7 +195,7 @@ mdream4j/
 │   │       │   HtmlOutputOps.java, PluginOps.java, Buffer.java
 │   ├── src/test/java/                 # JUnit 5 (Java 11-compatible)
 │   └── src/test/resources/golden/     # JSONL conformance corpus
-├── mdream4j-oracle/               # test-scope, release 25, never published
+├── mdream4j-reference/            # test-scope, release 25, never published
 ├── mdream4j-bench/                # JMH 1.37, one module/profile per contender
 ├── mdream4j-cli/                  # optional; hyperfine table
 └── docs/                          # methodology, parity report, ADRs
@@ -255,9 +255,9 @@ Output: `golden/*.jsonl`, ~1,100 cases. Regeneration is a maintainer task (`make
 
 ### 6.2 Differential fuzzing
 
-`mdream4j-oracle` + Jazzer:
+`mdream4j-reference` + Jazzer:
 
-- **Oracle fuzz**: random/mutated HTML → Java output == Rust output, `truncated` equal.
+- **Reference fuzz**: random/mutated HTML → Java output == Rust output, `truncated` equal.
 - **Streaming invariant**: chunk sizes `{1,2,3,7,64,4096,random}` concatenate to one-shot.
 - **Drain transparency**: port `new_drain_disabled()` and assert on/off equality.
 - **Cap parity**, **overflow parity** (depth 511/512/513, all three overflow modes).
@@ -298,7 +298,7 @@ guarantees in §8.2. Consumer migration is tracked separately in `docs/CONSUMERS
 | 5 | xberg Java (FFM) | `io.xberg:html-to-markdown:3.19.1` + Jackson 2.22.4 | own JVM |
 | 6 | copy_down | `io.github.furstenheim:copy_down:1.1` | own JVM |
 | 7 | jsoup floor | `org.jsoup:jsoup:1.23.2` — `parse`, `parse().text()` | own JVM |
-| 8 | OG mdream — Rust | via `mdream4j-oracle` (FFM) | own JVM |
+| 8 | OG mdream — Rust | via `mdream4j-reference` (FFM) | own JVM |
 | 9 | OG mdream — CLI | `hyperfine` (startup reported separately) | shell |
 | 10 | OG mdream — NAPI/JS | `pnpm bench` upstream | Node |
 | 11 | Tika 4 (optional) | `tika-core:4.2.0` + html module | own JVM |
@@ -393,7 +393,7 @@ consumer repositories; this plan only commits to the surface and guarantees they
 
 | Milestone | Content | Calendar (1 dev + agents) |
 |---|---|---|
-| **M0 — Harness** | Repo, wrapper, CI (11/17/21/25), 11 benchmark contenders, oracle, golden dumper, native-image smoke, **API surface review against both consumer wrappers** | 2 weeks |
+| **M0 — Harness** | Repo, wrapper, CI (11/17/21/25), 11 benchmark contenders, reference bridge, golden dumper, native-image smoke, **API surface review against both consumer wrappers** | 2 weeks |
 | **M1 — Walking skeleton** | S1–S4 minimal + S5 for core tags; one-shot + streaming; 100 goldens | 3 weeks |
 | **M2 — Markdown parity** | full `OutputOps` (tables, lists, escaping, fences, wrapping, spacing); 664 assertions green | 5–6 weeks |
 | **M3 — Streaming + caps** | chunk sweep, drain parity, `maxNodeBytes`, depth overflow | 3 weeks |
@@ -444,7 +444,7 @@ behaviour diff. Adopt one upstream PR per commit. Treat it as a fork with a sync
 ## 11. Immediate next steps (2 weeks)
 
 1. **Scaffold**: `git init`, parent POM, wrapper, `module-info`, OSGi headers, CI, licences.
-2. **Oracle**: Rust `mdream-oracle` cdylib + Java FFM bridge; 100% equality on 8 fixtures.
+2. **Reference bridge**: Rust `mdream-reference` cdylib + Java FFM bridge; 100% equality on 8 fixtures.
 3. **Goldens**: dumper → `golden/*.jsonl` (~1,100 cases), checked in.
 4. **Benchmarks**: wire all 11 contenders; publish the baseline on JDK 11 and 25. This also
    produces the first real xberg number (their README figure is vendor-supplied).
@@ -460,7 +460,7 @@ behaviour diff. Adopt one upstream PR per commit. Treat it as a fork with a sync
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | `output.rs` port outruns estimates | High | High | Walking skeleton early; cut M5; goldens per function |
-| Subtle output drift | Medium | High | Oracle fuzzing + SHA gate in JMH |
+| Subtle output drift | Medium | High | Reference fuzzing + SHA gate in JMH |
 | `char[]` slower than expected | Medium | Medium | 2-day spike with kill criterion |
 | Java 11 JIT underperforms 25 | Medium | Medium | Benchmark both; report 11; optimise against 11 |
 | GraalVM needs config after all | Low | Medium | Native smoke from day one; no reflection by design |
@@ -495,5 +495,5 @@ library.
 3. The new constraints — **Java 11** and **GraalVM native-image** — are incompatible with FFM.
    The port is now the only design that satisfies all three requirements simultaneously.
 
-FFM remains the correct tool for the **oracle**, where exactness matters and none of its
+FFM remains the correct tool for the **reference bridge**, where exactness matters and none of its
 downsides ship.

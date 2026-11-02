@@ -12,7 +12,7 @@ outputs were diffed against the upstream Rust results.
 > cdylib, 6 native libraries, 15 MB JAR, MIT, 888★, actively maintained — and its Java layer
 > depends on Jackson and serialises options/results through JSON on every call. So FFM is not an
 > open niche, and its "faster to ship" advantage is smaller than assumed. The recommendation is now
-> **port the core to pure Java 25, and keep FFM only as a test oracle and benchmark baseline**.
+> **port the core to pure Java 25, and keep FFM only as a test-only reference bridge and benchmark baseline**.
 > See [`PLAN.md`](./PLAN.md) §2 and Appendix A for the revised decision matrix.
 
 ---
