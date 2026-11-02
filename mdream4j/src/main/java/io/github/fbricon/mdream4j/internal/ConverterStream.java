@@ -48,16 +48,27 @@ final class ConverterStream implements MarkdownStream {
       throw new IllegalStateException("stream already finished");
     }
     String chunk = html.toString();
-    if (carry.length() == 0) {
+    if (carry.length() == 0 && !endsWithHighSurrogate(chunk)) {
       int consumed = ParseOps.processHtml(state, chunk);
       carry.append(chunk, consumed, chunk.length());
     } else {
       carry.append(chunk);
-      String buffer = carry.toString();
-      int consumed = ParseOps.processHtml(state, buffer);
+      // A chunk boundary can fall inside a surrogate pair. Hold the dangling
+      // high surrogate until the next feed supplies its low half, so the pair is
+      // counted (and emitted) as one character rather than two lone surrogates.
+      int end = carry.length();
+      if (end > 0 && Character.isHighSurrogate(carry.charAt(end - 1))) {
+        end--;
+      }
+      String buffer = carry.substring(0, end);
+      int consumed = buffer.isEmpty() ? 0 : ParseOps.processHtml(state, buffer);
       carry.delete(0, consumed);
     }
     return OutputOps.getMarkdownChunk(state);
+  }
+
+  private static boolean endsWithHighSurrogate(String value) {
+    return !value.isEmpty() && Character.isHighSurrogate(value.charAt(value.length() - 1));
   }
 
   @Override

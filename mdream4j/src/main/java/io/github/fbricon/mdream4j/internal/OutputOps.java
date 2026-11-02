@@ -1685,6 +1685,14 @@ final class OutputOps {
             String prefix = continuationPrefix(self);
             return "\n" + prefix + HEADING_PREFIXES[depth];
           }
+          if (self.listIndent.length() > 0
+              && self.stack.size() >= 2
+              && self.stack.get(self.stack.size() - 2).tagId == Consts.TAG_LI) {
+            // A heading directly inside a list item must break away from the
+            // item text and keep the item's content column.
+            String prefix = continuationPrefix(self);
+            return blockOpenPrefix(self, prefix) + HEADING_PREFIXES[depth];
+          }
           return HEADING_PREFIXES[depth];
         }
       case Consts.TAG_HR:
@@ -3003,6 +3011,10 @@ final class OutputOps {
     if (!self.preFencePending) {
       return;
     }
+    self.preFencePending = false;
+    // The fence belongs to the `<pre>` that requested it, not to whatever `<pre>`
+    // is open when its first content arrives: a nested `<pre>` must not steal it.
+    self.preFenceOwnerDepth = self.preFencePendingDepth;
     String lang = self.preFenceLang == null ? "" : self.preFenceLang;
     String fence;
     if (self.depthMap[Consts.TAG_LI] > 0) {
@@ -3013,11 +3025,12 @@ final class OutputOps {
       fence = "```" + lang + "\n";
     }
     int outputStart = self.buffer.length();
-    self.buffer.append(fence);
-    self.lastContentCacheLen = fence.length();
+    self.lastContentCacheLen = pushCodeSpanContent(self, fence, true);
+    if (self.lastContentCacheLen != fence.length()) {
+      self.preFenceOwnerDepth = 0;
+      return;
+    }
     startCodeFence(self, outputStart, self.buffer.length(), lang, self.listIndent.toString());
-    self.preFenceOwnerDepth = self.depthMap[Consts.TAG_PRE];
-    self.preFencePending = false;
     self.lastNodeIsInline = false;
   }
 
@@ -4008,6 +4021,19 @@ final class OutputOps {
         && !self.inTableCell()
         && self.depthMap[Consts.TAG_PRE] == 0) {
       exitRawHtmlBoundary(self, hasOverride, output != null);
+    }
+
+    if (tagId == Consts.TAG_LI && !self.plainText) {
+      // A hard break already ended the item. Its continuation indentation must
+      // not become a whitespace-only line before the following block.
+      if (self.hardBreakEnd == self.buffer.length()
+          && !self.emptyItemHazard
+          && !hasOverride
+          && self.depthMap[Consts.TAG_PRE] == 0
+          && !self.inTableCell()) {
+        trimTrailingSpaces(self);
+        self.hardBreakEnd = self.buffer.length();
+      }
     }
 
     int outputStart = self.buffer.length();
