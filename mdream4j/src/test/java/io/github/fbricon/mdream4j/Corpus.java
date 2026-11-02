@@ -45,6 +45,44 @@ final class Corpus {
     throw new IllegalStateException("golden/corpus.jsonl not found above " + here);
   }
 
+  /** Builds the case's options for Markdown output. */
+  static Options options(Map<String, Object> corpusCase) {
+    return options(corpusCase, OutputFormat.MARKDOWN);
+  }
+
+  /**
+   * Builds the case's options for {@code format}.
+   *
+   * <p>Only the scalar options the corpus uses so far are mapped; a new option name fails loudly
+   * instead of silently comparing against default-option output.
+   */
+  static Options options(Map<String, Object> corpusCase, OutputFormat format) {
+    Options.Builder builder = Options.builder().format(format);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> options = (Map<String, Object>) corpusCase.get("options");
+    if (options == null) {
+      return builder.build();
+    }
+    for (Map.Entry<String, Object> entry : options.entrySet()) {
+      String name = entry.getKey();
+      Object value = entry.getValue();
+      switch (name) {
+        case "origin":
+          builder.origin((String) value);
+          break;
+        case "wrapWidth":
+          builder.wrapWidth(((Number) value).intValue());
+          break;
+        case "maxNodeBytes":
+          builder.maxNodeBytes(((Number) value).longValue());
+          break;
+        default:
+          throw new IllegalArgumentException("unsupported corpus option: " + name);
+      }
+    }
+    return builder.build();
+  }
+
   /** Minimal JSON reader for the corpus shape. */
   private static final class Json {
     private final String source;

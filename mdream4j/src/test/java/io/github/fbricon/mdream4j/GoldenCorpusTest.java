@@ -27,14 +27,14 @@ import org.junit.jupiter.api.Test;
 class GoldenCorpusTest {
 
   /** Parity floors, raised as the port converges. */
-  private static final int MARKDOWN_FLOOR = 147;
-  private static final int TEXT_FLOOR = 147;
-  private static final int HTML_FLOOR = 13;
+  private static final int MARKDOWN_FLOOR = 173;
+  private static final int TEXT_FLOOR = 173;
+  private static final int HTML_FLOOR = 17;
 
   @Test
   void matchesReferenceCorpus() throws IOException {
     List<Map<String, Object>> cases = Corpus.loadCases();
-    assertTrue(cases.size() >= 147, "corpus must not shrink: " + cases.size());
+    assertTrue(cases.size() >= 173, "corpus must not shrink: " + cases.size());
 
     int markdownPass = 0;
     int textPass = 0;
@@ -52,7 +52,7 @@ class GoldenCorpusTest {
       String expectedHtml = (String) outputs.get("html");
       boolean expectedTruncated = Boolean.TRUE.equals(outputs.get("truncated"));
 
-      MdreamResult markdown = HtmlToMarkdown.convertResult(html, Options.defaults());
+      MdreamResult markdown = HtmlToMarkdown.convertResult(html, Corpus.options(corpusCase));
       if (expectedMarkdown.equals(markdown.markdown()) && markdown.truncated() == expectedTruncated) {
         markdownPass++;
       } else if (markdownDiffs.size() < 40) {
@@ -60,13 +60,15 @@ class GoldenCorpusTest {
       }
 
       String text =
-          HtmlToMarkdown.convert(html, Options.builder().format(OutputFormat.TEXT).build());
+          HtmlToMarkdown.convert(
+              html, Corpus.options(corpusCase, OutputFormat.TEXT));
       if (expectedText.equals(text)) {
         textPass++;
       }
 
       String htmlOut =
-          HtmlToMarkdown.convert(html, Options.builder().format(OutputFormat.HTML).build());
+          HtmlToMarkdown.convert(
+              html, Corpus.options(corpusCase, OutputFormat.HTML));
       if (expectedHtml.equals(htmlOut)) {
         htmlPass++;
       }

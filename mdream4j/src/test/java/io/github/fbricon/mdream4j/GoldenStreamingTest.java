@@ -31,7 +31,7 @@ class GoldenStreamingTest {
   @Test
   void feedConcatenationMatchesOneShot() throws IOException {
     List<Map<String, Object>> cases = Corpus.loadCases();
-    assertTrue(cases.size() >= 147, "corpus must not shrink: " + cases.size());
+    assertTrue(cases.size() >= 173, "corpus must not shrink: " + cases.size());
 
     List<String> failures = new ArrayList<>();
     int checks = 0;
@@ -48,7 +48,8 @@ class GoldenStreamingTest {
           continue;
         }
         checks++;
-        MarkdownStream stream = HtmlToMarkdown.newStream(Options.defaults());
+        Options options = Corpus.options(corpusCase);
+        MarkdownStream stream = HtmlToMarkdown.newStream(options);
         StringBuilder out = new StringBuilder();
         for (int start = 0; start < html.length(); start += size) {
           out.append(stream.feed(html.substring(start, Math.min(html.length(), start + size))));
