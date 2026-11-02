@@ -2482,7 +2482,10 @@ final class ParseOps {
       return;
     }
     self.textRunNextFlush = ConvertState.TEXT_RUN_FLUSH_THRESHOLD;
+    // `split_off`: process only the prefix and keep the tail as the run's continuation. Leaving the
+    // whole buffer in place would emit the tail twice.
     String tail = textBuffer.substring(cut);
+    textBuffer.setLength(cut);
     processTextBufferPiece(self, textBuffer, false);
     // A blank link's text can outgrow the cap within a single run.
     checkHeldOutput(self);
