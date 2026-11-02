@@ -736,6 +736,69 @@ final class OutputOps {
     self.buffer.append(text);
   }
 
+  /** Whether an open inline code span past its cap drops everything written to it. */
+  static boolean dropsCodeSpanContent(ConvertState self) {
+    if (self.maxNodeBytesInt == 0 || self.codeSpans.isEmpty()) {
+      return false;
+    }
+    ConvertState.CodeSpanState span = self.codeSpans.get(0);
+    return !span.openerEmitted || span.exhausted;
+  }
+
+  /**
+   * Writes content that may sit behind an open inline-code delimiter.
+   *
+   * <p>Tag output is atomic, so a cap cannot leave half a Markdown marker; text may be cut at a
+   * character boundary. Once an append cannot fit, later content never refills the spare bytes.
+   */
+  private static int pushCodeSpanContent(ConvertState self, String value, boolean atomic) {
+    if (value.isEmpty()) {
+      return 0;
+    }
+    int cap = self.maxNodeBytesInt;
+    if (cap == 0 || self.codeSpans.isEmpty()) {
+      self.buffer.append(value);
+      return value.length();
+    }
+    ConvertState.CodeSpanState span = self.codeSpans.get(0);
+    if (!span.openerEmitted || span.exhausted) {
+      self.truncated = true;
+      return 0;
+    }
+    int held = Scan.utf8Length(self.buffer, span.contentStart, self.buffer.length());
+    int room = Math.max(0, cap - held);
+    int kept;
+    if (atomic && Scan.utf8Length(value) > room) {
+      kept = 0;
+    } else {
+      kept = clampToCharBoundary(value, room);
+    }
+    if (kept != value.length()) {
+      span.exhausted = true;
+      self.truncated = true;
+    }
+    if (kept > 0) {
+      self.buffer.append(value, 0, kept);
+    }
+    return kept;
+  }
+
+  /** Truncates {@code value} to the longest prefix whose UTF-8 length fits {@code maxBytes}. */
+  private static int clampToCharBoundary(String value, int maxBytes) {
+    int bytes = 0;
+    int end = 0;
+    while (end < value.length()) {
+      int cp = value.codePointAt(end);
+      int len = ParseOps.utf8Length(cp);
+      if (bytes + len > maxBytes) {
+        break;
+      }
+      bytes += len;
+      end += Character.charCount(cp);
+    }
+    return end;
+  }
+
   /** Whether prose here may be hard-wrapped: not code, a table cell or a heading. */
   private static boolean canWrapHere(ConvertState self) {
     return self.depthMap[Consts.TAG_PRE] == 0
@@ -1180,12 +1243,19 @@ final class OutputOps {
         ownsLeadingSpace || (self.plainText && self.depthMap[Consts.TAG_PRE] > 0);
     if (self.wrapWidth != 0 && canWrapHere(self)) {
       pushTextWrapped(self, text, lastChar, ownsLeadingSpace, relocatedSpace);
+    } else if (self.maxNodeBytesInt == 0) {
+      if (!ownsSpace && shouldAddSpacingBeforeText(self, lastChar, text)) {
+        pushTextUncapped(self, " ", false);
+        self.lastContentCacheLen += text.length();
+        self.buffer.append(text);
+      } else {
+        pushTextUncapped(self, text, false);
+      }
     } else if (!ownsSpace && shouldAddSpacingBeforeText(self, lastChar, text)) {
-      pushTextUncapped(self, " ", false);
-      self.lastContentCacheLen += text.length();
-      self.buffer.append(text);
+      int written = pushCodeSpanContent(self, " ", true);
+      self.lastContentCacheLen = written + pushCodeSpanContent(self, text, false);
     } else {
-      pushTextUncapped(self, text, false);
+      self.lastContentCacheLen = pushCodeSpanContent(self, text, false);
     }
 
     finishTextNode(self, text, containsWhitespace, depth, index);
@@ -2076,6 +2146,11 @@ final class OutputOps {
   }
 
   private static String tableRowOpener(ConvertState self, boolean isInline) {
+    // Inside a code span past its cap nothing more is written, so classifying the
+    // line only re-reads it: one that never ends, once per row.
+    if (!isInline && dropsCodeSpanContent(self)) {
+      return "| ";
+    }
     String indent = self.depthMap[Consts.TAG_LI] > 0 ? self.listIndent.toString() : "";
     LineBeforeRow state = lineStateBeforeRow(self);
     if (state == LineBeforeRow.ROW) {
@@ -2178,7 +2253,7 @@ final class OutputOps {
             && last != '\n'
             && last != '\t'
             && !Scan.isWhitespace((char) firstOutput)) {
-          self.buffer.append(' ');
+          pushCodeSpanContent(self, " ", true);
         }
         self.pendingInlineWhitespace = false;
       }
@@ -2201,12 +2276,10 @@ final class OutputOps {
           && !outputStr.isEmpty()
           && lastChar >= 0
           && needsSpacing(self, lastChar, outputStr.charAt(0))) {
-        self.buffer.append(' ');
-        self.lastContentCacheLen = 1;
+        self.lastContentCacheLen = pushCodeSpanContent(self, " ", true);
       }
       if (!outputStr.isEmpty()) {
-        self.buffer.append(outputStr);
-        self.lastContentCacheLen = outputStr.length();
+        self.lastContentCacheLen = pushCodeSpanContent(self, outputStr, true);
       }
       if (isEnter && !literal && outputStr.startsWith("  \n")) {
         self.hardBreakEnd = self.buffer.length();
@@ -2225,8 +2298,7 @@ final class OutputOps {
     if (newLines > 0) {
       if (self.buffer.length() == 0 && !self.hasStreamedOutput) {
         if (!outputStr.isEmpty()) {
-          self.buffer.append(outputStr);
-          self.lastContentCacheLen = outputStr.length();
+          self.lastContentCacheLen = pushCodeSpanContent(self, outputStr, true);
         }
         self.lastNodeIsInline = isInline;
         return;
@@ -2252,19 +2324,17 @@ final class OutputOps {
 
       if (isEnter) {
         for (int i = 0; i < newLines; i++) {
-          self.buffer.append('\n');
+          pushCodeSpanContent(self, "\n", true);
         }
         if (!outputStr.isEmpty()) {
-          self.buffer.append(outputStr);
-          self.lastContentCacheLen = outputStr.length();
+          self.lastContentCacheLen = pushCodeSpanContent(self, outputStr, true);
         }
       } else {
         if (!outputStr.isEmpty()) {
-          self.buffer.append(outputStr);
-          self.lastContentCacheLen = outputStr.length();
+          self.lastContentCacheLen = pushCodeSpanContent(self, outputStr, true);
         }
         for (int i = 0; i < newLines; i++) {
-          self.buffer.append('\n');
+          pushCodeSpanContent(self, "\n", true);
         }
       }
     } else {
@@ -2319,12 +2389,10 @@ final class OutputOps {
           && !outputStr.isEmpty()
           && lastChar >= 0
           && needsSpacing(self, lastChar, outputStr.charAt(0))) {
-        self.buffer.append(' ');
-        self.lastContentCacheLen = 1;
+        self.lastContentCacheLen = pushCodeSpanContent(self, " ", true);
       }
       if (!outputStr.isEmpty()) {
-        self.buffer.append(outputStr);
-        self.lastContentCacheLen = outputStr.length();
+        self.lastContentCacheLen = pushCodeSpanContent(self, outputStr, true);
       }
     }
 
@@ -2439,10 +2507,23 @@ final class OutputOps {
       }
     }
     int indentLen = indent ? self.listIndent.length() : 0;
-    for (int i = newlines; i < 2; i++) {
-      self.buffer.append('\n');
+    // Charge the complete separator to an open code span. A rejected write leaves
+    // the boundary pending until content can be emitted again.
+    if (self.maxNodeBytesInt != 0 && !self.codeSpans.isEmpty()) {
+      StringBuilder separator = new StringBuilder(2 - newlines + indentLen);
+      for (int i = newlines; i < 2; i++) {
+        separator.append('\n');
+      }
+      separator.append(self.listIndent, 0, indentLen);
+      if (pushCodeSpanContent(self, separator.toString(), true) == 0) {
+        return;
+      }
+    } else {
+      for (int i = newlines; i < 2; i++) {
+        self.buffer.append('\n');
+      }
+      self.buffer.append(self.listIndent, 0, indentLen);
     }
-    self.buffer.append(self.listIndent, 0, indentLen);
     self.pendingRawHtmlBoundary = false;
     self.lastContentCacheLen = 2 - newlines + indentLen;
     self.hasLastTextNode = false;
@@ -2557,16 +2638,38 @@ final class OutputOps {
     if (self.depthMap[Consts.TAG_TABLE] > 0
         && span.contentStart <= self.buffer.length()
         && self.buffer.substring(span.contentStart).indexOf('|') >= 0) {
-      int start = span.contentStart;
-      StringBuilder escaped = new StringBuilder(self.buffer.length() - start);
-      for (int i = start; i < self.buffer.length(); i++) {
-        char c = self.buffer.charAt(i);
-        if (c == '|') {
+      String content = self.buffer.substring(span.contentStart);
+      // A pipe splits the row even inside a code span, and its escaped form still
+      // has to fit the aggregate budget.
+      long escapedCap = Integer.MAX_VALUE;
+      if (self.maxNodeBytesInt != 0) {
+        if (!self.codeSpans.isEmpty()) {
+          int held =
+              Scan.utf8Length(
+                  self.buffer, self.codeSpans.get(0).contentStart, self.buffer.length());
+          escapedCap =
+              (long) Scan.utf8Length(content) + Math.max(0, self.maxNodeBytesInt - held);
+        } else {
+          escapedCap = self.maxNodeBytesInt;
+        }
+      }
+      StringBuilder escaped = new StringBuilder(content.length() + 8);
+      long escapedBytes = 0;
+      for (int i = 0; i < content.length(); ) {
+        int cp = content.codePointAt(i);
+        int addition = cp == '|' ? 2 : ParseOps.utf8Length(cp);
+        if (escapedBytes + addition > escapedCap) {
+          self.truncated = true;
+          break;
+        }
+        escapedBytes += addition;
+        if (cp == '|') {
           escaped.append('\\');
         }
-        escaped.append(c);
+        escaped.appendCodePoint(cp);
+        i += Character.charCount(cp);
       }
-      self.buffer.replace(start, self.buffer.length(), escaped.toString());
+      self.buffer.replace(span.contentStart, self.buffer.length(), escaped.toString());
     }
     String content = self.buffer.substring(span.contentStart);
     int maxRun = maxBacktickRun(content);
@@ -2665,6 +2768,19 @@ final class OutputOps {
         break;
       }
       lineStart = lineEnd + 1;
+    }
+    if (self.maxNodeBytesInt != 0 && !self.codeSpans.isEmpty()) {
+      ConvertState.CodeSpanState span = self.codeSpans.get(0);
+      if (frame.contentStart >= span.contentStart && quoted.length() > content.length()) {
+        int held = Scan.utf8Length(self.buffer, span.contentStart, self.buffer.length());
+        if (span.exhausted
+            || held - Scan.utf8Length(content) + Scan.utf8Length(quoted)
+                > self.maxNodeBytesInt) {
+          span.exhausted = true;
+          self.truncated = true;
+          return;
+        }
+      }
     }
     truncateBuffer(self, frame.contentStart);
     self.buffer.append(quoted);

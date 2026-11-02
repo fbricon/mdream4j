@@ -2438,6 +2438,27 @@ final class ParseOps {
             && !self.rawtextEndTagPending;
     boolean dropped = rawtextText && dropsRawText(self);
 
+    boolean discardLosesOutput;
+    switch (self.discard.kind) {
+      case ConvertState.Discard.KIND_TAG:
+        discardLosesOutput = true;
+        break;
+      case ConvertState.Discard.KIND_CDATA:
+        discardLosesOutput = hasSurfacedCdata(self);
+        break;
+      default:
+        // An unterminated comment, doctype or end tag drops in an uncapped parse too.
+        discardLosesOutput = false;
+        break;
+    }
+    if (discardLosesOutput
+        || (self.maxNodeBytesInt != 0
+            && Scan.utf8Length(rest) > self.maxNodeBytesInt
+            && !dropped)
+        || (self.pendingStart != null && self.pendingStart.carry.budget.overflow)) {
+      self.truncated = true;
+    }
+
     if (inScript) {
       pushScriptText(self, rest);
       flushScriptText(self);
@@ -2731,7 +2752,7 @@ final class ParseOps {
     return truncated;
   }
 
-  private static int utf8Length(int cp) {
+  static int utf8Length(int cp) {
     if (cp < 0x80) {
       return 1;
     }
