@@ -10,6 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { collectRustCases } from "./rust-cases.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "../..");
@@ -392,6 +393,21 @@ opt("combo-options", PAGE, {
     extraction: { selectors: ["a[href]", "x-note"] },
   },
 });
+
+// 5. Inputs from the upstream Rust suites. The tests assert outputs we do not
+// need; the reference bridge regenerates them. Only literal inputs are
+// recovered (see `rust-cases.mjs`), so a `format!`-built fixture is skipped.
+const seen = new Set(
+  cases.map((entry) => `${JSON.stringify(entry.options)}\u0000${entry.html}`),
+);
+for (const entry of collectRustCases(upstream)) {
+  const key = `${JSON.stringify(entry.options)}\u0000${entry.html}`;
+  if (seen.has(key)) {
+    continue;
+  }
+  seen.add(key);
+  cases.push(entry);
+}
 
 fs.mkdirSync(path.dirname(corpusPath), { recursive: true });
 const out = cases.map((entry) => JSON.stringify(entry)).join("\n") + "\n";

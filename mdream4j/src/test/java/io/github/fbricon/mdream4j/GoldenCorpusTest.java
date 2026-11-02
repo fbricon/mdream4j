@@ -29,15 +29,15 @@ import org.junit.jupiter.api.Test;
 class GoldenCorpusTest {
 
   /** Parity floors, raised as the port converges. */
-  private static final int MARKDOWN_FLOOR = 238;
-  private static final int TEXT_FLOOR = 238;
-  private static final int HTML_FLOOR = 238;
-  private static final int METADATA_FLOOR = 238;
+  private static final int MARKDOWN_FLOOR = 739;
+  private static final int TEXT_FLOOR = 739;
+  private static final int HTML_FLOOR = 739;
+  private static final int METADATA_FLOOR = 739;
 
   @Test
   void matchesReferenceCorpus() throws IOException {
     List<Map<String, Object>> cases = Corpus.loadCases();
-    assertTrue(cases.size() >= 238, "corpus must not shrink: " + cases.size());
+    assertTrue(cases.size() >= 739, "corpus must not shrink: " + cases.size());
 
     int markdownPass = 0;
     int textPass = 0;
@@ -45,6 +45,8 @@ class GoldenCorpusTest {
     int metadataPass = 0;
     StringBuilder report = new StringBuilder();
     List<String> markdownDiffs = new ArrayList<>();
+    List<String> textDiffs = new ArrayList<>();
+    List<String> htmlDiffs = new ArrayList<>();
     List<String> metadataDiffs = new ArrayList<>();
 
     for (Map<String, Object> corpusCase : cases) {
@@ -84,6 +86,8 @@ class GoldenCorpusTest {
               html, Corpus.options(corpusCase, OutputFormat.TEXT));
       if (expectedText.equals(text)) {
         textPass++;
+      } else if (textDiffs.size() < 40) {
+        textDiffs.add(diff(id, expectedText, text));
       }
 
       String htmlOut =
@@ -91,6 +95,8 @@ class GoldenCorpusTest {
               html, Corpus.options(corpusCase, OutputFormat.HTML));
       if (expectedHtml.equals(htmlOut)) {
         htmlPass++;
+      } else if (htmlDiffs.size() < 40) {
+        htmlDiffs.add(diff(id, expectedHtml, htmlOut));
       }
     }
 
@@ -101,6 +107,12 @@ class GoldenCorpusTest {
     report.append("metadata: ").append(metadataPass).append('/').append(total).append('\n');
     report.append('\n');
     for (String diff : markdownDiffs) {
+      report.append(diff).append('\n');
+    }
+    for (String diff : textDiffs) {
+      report.append(diff).append('\n');
+    }
+    for (String diff : htmlDiffs) {
       report.append(diff).append('\n');
     }
     for (String diff : metadataDiffs) {
