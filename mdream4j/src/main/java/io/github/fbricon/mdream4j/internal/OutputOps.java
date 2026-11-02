@@ -293,7 +293,7 @@ final class OutputOps {
     if (len > 0) {
       return self.buffer.charAt(len - 1);
     }
-    if (self.hasStreamedOutput) {
+    if (self.hasFlushedTail()) {
       return self.flushedTail[1];
     }
     return -1;
@@ -303,7 +303,7 @@ final class OutputOps {
     StringBuilder buffer = self.buffer;
     int len = buffer.length();
     char last;
-    boolean tailKnown = self.hasStreamedOutput;
+    boolean tailKnown = self.hasFlushedTail();
     if (len > 0) {
       last = buffer.charAt(len - 1);
     } else if (tailKnown) {
@@ -494,7 +494,7 @@ final class OutputOps {
       index--;
     }
     if (index == 0) {
-      return !self.hasStreamedOutput
+      return !self.hasFlushedTail()
           || self.flushedTail[1] == '\n'
           || self.flushedTail[1] == '\r';
     }
@@ -2252,6 +2252,27 @@ final class OutputOps {
     while (lineStart > 0 && self.buffer.charAt(lineStart - 1) != '\n') {
       lineStart--;
     }
+    // A `lineStart` of zero is the drained buffer's front, not the line's, once a drain has
+    // taken this line's beginning: the fragment can open with a tag the real line only
+    // continues, which would suspend Markdown and drop the escapes a one-shot conversion writes.
+    if (lineStart == 0 && self.hasFlushedTail() && self.flushedTail[1] != '\n') {
+      switch (self.cutLineLeadKind) {
+        case ConvertState.CUT_LEAD_RAW_HTML:
+          return true;
+        case ConvertState.CUT_LEAD_BLANK:
+          // The cut fell inside this line's indent, so the fragment's own spaces continue a run
+          // that started before it: three is all the run may total, however it is split.
+          int own = 0;
+          while (own < len && self.buffer.charAt(own) == ' ') {
+            own++;
+          }
+          return self.cutLineLeadIndent + own <= ConvertState.RAW_HTML_MAX_INDENT
+              && own < len
+              && self.buffer.charAt(own) == '<';
+        default:
+          return false;
+      }
+    }
     int indent = lineStart;
     while (indent < len && indent - lineStart < 3 && self.buffer.charAt(indent) == ' ') {
       indent++;
@@ -3812,14 +3833,35 @@ final class OutputOps {
     return start;
   }
 
+  /**
+   * Whether {@code index} splits a surrogate pair, which no chunk or drain cut may do.
+   *
+   * <p>Offsets are char indices, so unlike the Rust byte offsets they cannot fall inside a
+   * multi-byte character; a surrogate pair is the only remaining place a slice can land.
+   */
+  private static boolean splitsSurrogatePair(CharSequence buffer, int index) {
+    return index > 0
+        && index < buffer.length()
+        && Character.isLowSurrogate(buffer.charAt(index))
+        && Character.isHighSurrogate(buffer.charAt(index - 1));
+  }
+
   /** Highest offset that still holds the whitespace run before {@code at}. */
   private static int holdBefore(CharSequence buffer, int at) {
-    return trailingAsciiWhitespaceStart(buffer, Math.min(at, buffer.length()));
+    int index = Math.min(at, buffer.length());
+    while (splitsSurrogatePair(buffer, index)) {
+      index--;
+    }
+    return trailingAsciiWhitespaceStart(buffer, index);
   }
 
   /** Highest offset that still keeps the two bytes before {@code at}. */
-  private static int keepTwoBefore(int at) {
-    return Math.max(0, at - 2);
+  private static int keepTwoBefore(CharSequence buffer, int at) {
+    int index = Math.max(0, Math.min(at, buffer.length()) - 2);
+    while (splitsSurrogatePair(buffer, index)) {
+      index--;
+    }
+    return index;
   }
 
   /**
@@ -3950,7 +3992,7 @@ final class OutputOps {
       stableEnd = Math.min(stableEnd, holdBefore(self.buffer, linkFloor));
     }
     if (self.emptyItemHazard) {
-      stableEnd = Math.min(stableEnd, keepTwoBefore(self.emptyItemLineStart));
+      stableEnd = Math.min(stableEnd, keepTwoBefore(self.buffer, self.emptyItemLineStart));
     }
     if (self.inHeading()) {
       int run = Math.min(stableEnd, bufLen);
@@ -3961,7 +4003,14 @@ final class OutputOps {
     }
 
     int start = Math.max(self.lastYieldedLength, leading);
+    while (stableEnd > start && splitsSurrogatePair(self.buffer, stableEnd)) {
+      stableEnd--;
+    }
+    while (start > 0 && splitsSurrogatePair(self.buffer, start)) {
+      start--;
+    }
     if (start >= stableEnd) {
+      drainStreamedPrefix(self);
       return "";
     }
     String out = self.buffer.substring(start, stableEnd);
@@ -3975,7 +4024,224 @@ final class OutputOps {
         parent.holdReleased = true;
       }
     }
+    drainStreamedPrefix(self);
     return out;
+  }
+
+  /**
+   * Free already-yielded output so streaming memory stays O(window), not O(document).
+   *
+   * <p>Mirrors {@code drain_streamed_prefix}: keep the tail a late rewrite may still touch and
+   * never drop the bytes before an open link bracket or another live offset, then rebase every
+   * stored offset. Fragment cleaning keeps the whole document and never reaches here.
+   */
+  private static void drainStreamedPrefix(ConvertState self) {
+    if (self.disableDrain || self.retainsWholeDocument()) {
+      return;
+    }
+    // Keep the tail a late rewrite may still touch, and never drop the `[` of an open link.
+    // Formatting also inspects the last two bytes, and row separation may need the widest GFM
+    // list marker: up to three spaces, nine digits, a delimiter and a trailing space.
+    int markerTail = 14 + self.listIndent.length();
+    int retainedTailStart =
+        Math.max(0, self.buffer.length() - Math.max(self.lastContentCacheLen, markerTail));
+    while (retainedTailStart > 0 && splitsSurrogatePair(self.buffer, retainedTailStart)) {
+      retainedTailStart--;
+    }
+    int drainEnd = Math.min(self.lastYieldedLength, retainedTailStart);
+
+    // Preserve newline context before every live reach-back point.
+    int bracketFloor = openLinkHoldFloor(self);
+    if (bracketFloor >= 0) {
+      drainEnd = Math.min(drainEnd, keepTwoBefore(self.buffer, bracketFloor));
+    }
+    if (!self.openMarkers.isEmpty()) {
+      drainEnd = Math.min(drainEnd, keepTwoBefore(self.buffer, self.openMarkers.get(0).outputStart));
+    }
+    if (!self.codeSpans.isEmpty()) {
+      drainEnd = Math.min(drainEnd, keepTwoBefore(self.buffer, self.codeSpans.get(0).outputStart));
+    }
+    if (self.codeFence != null) {
+      drainEnd = Math.min(drainEnd, keepTwoBefore(self.buffer, self.codeFence.outputStart));
+    }
+    if (!self.blockquotes.isEmpty()) {
+      drainEnd = Math.min(drainEnd, keepTwoBefore(self.buffer, self.blockquotes.get(0).contentStart));
+    }
+
+    // Settle a pending marker-line guard when the item's first content already answers it.
+    if (self.buffer.length() > 0
+        && !Chars.isAsciiWhitespace(self.buffer.charAt(self.buffer.length() - 1))) {
+      resolveItemMarker(self, false);
+    }
+    if (self.emptyItemHazard) {
+      drainEnd =
+          Math.min(drainEnd, keepTwoBefore(self.buffer, self.emptyItemLineStart));
+    }
+    if (drainEnd <= 0) {
+      return;
+    }
+    if (self.wrapWidth != 0) {
+      int lastNewline = -1;
+      for (int i = drainEnd - 1; i >= 0; i--) {
+        if (self.buffer.charAt(i) == '\n') {
+          lastNewline = i;
+          break;
+        }
+      }
+      if (lastNewline >= 0) {
+        self.bufferStartColumn = drainEnd - lastNewline - 1;
+      } else {
+        self.bufferStartColumn += drainEnd;
+      }
+    }
+    // The blank line that ends a raw-HTML region may sit in the bytes about to leave.
+    if (self.rawHtmlScannedTo < drainEnd
+        && !self.rawHtmlMarkdown
+        && self.inRawHtmlBlock()) {
+      trackRawHtmlMarkdownContext(self, drainEnd);
+    }
+    char first = self.buffer.charAt(0);
+    if (drainEnd >= 2) {
+      self.flushedTail[0] = self.buffer.charAt(drainEnd - 2);
+      self.flushedTail[1] = self.buffer.charAt(drainEnd - 1);
+    } else if (self.cutLineLeadKind == ConvertState.CUT_LEAD_UNCUT) {
+      // Nothing precedes a first cut this small: shifting the document-start sentinel in would
+      // invent a newline that cancels a real block separator.
+      self.flushedTail[0] = 0;
+      self.flushedTail[1] = first;
+    } else {
+      self.flushedTail[0] = self.flushedTail[1];
+      self.flushedTail[1] = first;
+    }
+    classifyCutLine(self, drainEnd);
+    if (self.link.open && drainEnd > self.link.bracketPos) {
+      self.link.holdReleased = true;
+    }
+    for (ConvertState.LinkOutputState parent : self.parentLinks) {
+      if (drainEnd > parent.bracketPos) {
+        parent.holdReleased = true;
+      }
+    }
+    self.buffer.delete(0, drainEnd);
+    noteBufferDrain(self, drainEnd);
+    self.lastYieldedLength -= drainEnd;
+    self.link.bracketPos = Math.max(0, self.link.bracketPos - drainEnd);
+    for (ConvertState.LinkOutputState parent : self.parentLinks) {
+      parent.bracketPos = Math.max(0, parent.bracketPos - drainEnd);
+    }
+    for (ConvertState.OpenMarker marker : self.openMarkers) {
+      marker.outputStart -= drainEnd;
+      marker.contentStart -= drainEnd;
+    }
+    for (ConvertState.CaptionFrame frame : self.captionFrames) {
+      if (frame.state == ConvertState.CAPTION_TENTATIVE) {
+        frame.tentativeOutputStart -= drainEnd;
+        frame.tentativeContentStart -= drainEnd;
+      }
+    }
+    for (ConvertState.CodeSpanState span : self.codeSpans) {
+      span.outputStart -= drainEnd;
+      span.contentStart -= drainEnd;
+    }
+    if (self.codeFence != null) {
+      self.codeFence.outputStart -= drainEnd;
+      self.codeFence.contentStart -= drainEnd;
+    }
+    for (ConvertState.BlockquoteFrame frame : self.blockquotes) {
+      frame.contentStart -= drainEnd;
+    }
+    self.emptyItemLineStart = Math.max(0, self.emptyItemLineStart - drainEnd);
+    self.emptyItemLen = Math.max(0, self.emptyItemLen - drainEnd);
+    self.rawHtmlScannedTo = Math.max(0, self.rawHtmlScannedTo - drainEnd);
+    self.lineStart = Math.max(0, self.lineStart - drainEnd);
+    self.lineStartScannedTo = Math.max(0, self.lineStartScannedTo - drainEnd);
+  }
+
+  /** Rebases the offset-indexed state that is not tied to a construct. */
+  private static void noteBufferDrain(ConvertState self, int removed) {
+    if (self.blockquoteLineScannedTo != 0) {
+      self.blockquoteLineScannedTo = Math.max(0, self.blockquoteLineScannedTo - removed);
+      self.blockquoteLineEnd = Math.max(0, self.blockquoteLineEnd - removed);
+    }
+    if (self.hardBreakEnd >= 0) {
+      self.hardBreakEnd = self.hardBreakEnd >= removed ? self.hardBreakEnd - removed : -1;
+    }
+  }
+
+  /**
+   * What the line ending at {@code drainEnd} leads with, given what an earlier cut of the same
+   * line already found. A line's leading spaces can be split across any number of drains, and
+   * only three of them may precede the {@code <} suspending Markdown.
+   */
+  private static void classifyCutLine(ConvertState self, int drainEnd) {
+    StringBuilder buffer = self.buffer;
+    if (buffer.charAt(drainEnd - 1) == '\n') {
+      // The cut ends the line, so the next one starts fresh at column zero.
+      self.cutLineLeadKind = ConvertState.CUT_LEAD_BLANK;
+      self.cutLineLeadIndent = 0;
+      return;
+    }
+    int newline = -1;
+    for (int i = drainEnd - 2; i >= 0; i--) {
+      if (buffer.charAt(i) == '\n') {
+        newline = i;
+        break;
+      }
+    }
+    int lineStart;
+    int already;
+    if (newline >= 0) {
+      // The line starts inside the drained bytes, so its indent starts there.
+      lineStart = newline + 1;
+      already = 0;
+    } else {
+      switch (self.cutLineLeadKind) {
+        case ConvertState.CUT_LEAD_RAW_HTML:
+        case ConvertState.CUT_LEAD_ROW:
+        case ConvertState.CUT_LEAD_CONTENT:
+          return;
+        case ConvertState.CUT_LEAD_BLANK:
+          lineStart = 0;
+          already = self.cutLineLeadIndent;
+          break;
+        default:
+          lineStart = 0;
+          already = 0;
+          break;
+      }
+    }
+    int own = 0;
+    while (lineStart + own < drainEnd && buffer.charAt(lineStart + own) == ' ') {
+      own++;
+    }
+    int indent = already + own;
+    int next = lineStart + own;
+    if (next >= drainEnd) {
+      // Still nothing but spaces, so the count continues past this cut too.
+      self.cutLineLeadKind = ConvertState.CUT_LEAD_BLANK;
+      self.cutLineLeadIndent = Math.min(indent, ConvertState.RAW_HTML_MAX_INDENT + 1);
+    } else if (buffer.charAt(next) == '<' && indent <= ConvertState.RAW_HTML_MAX_INDENT) {
+      self.cutLineLeadKind = ConvertState.CUT_LEAD_RAW_HTML;
+      self.cutLineLeadIndent = 0;
+    } else {
+      int content = next;
+      while (content < drainEnd
+          && (buffer.charAt(content) == ' ' || buffer.charAt(content) == '\t')) {
+        content++;
+      }
+      if (content >= drainEnd) {
+        // Blank, but with a tab in it: no space count describes this indent, so record one that
+        // can never open a raw block.
+        self.cutLineLeadKind = ConvertState.CUT_LEAD_BLANK;
+        self.cutLineLeadIndent = ConvertState.RAW_HTML_MAX_INDENT + 1;
+      } else if (buffer.charAt(content) == '|') {
+        self.cutLineLeadKind = ConvertState.CUT_LEAD_ROW;
+        self.cutLineLeadIndent = 0;
+      } else {
+        self.cutLineLeadKind = ConvertState.CUT_LEAD_CONTENT;
+        self.cutLineLeadIndent = 0;
+      }
+    }
   }
 
   static String getFinalMarkdownChunk(ConvertState self) {

@@ -190,6 +190,34 @@ final class ConvertState {
   int bufferStartColumn;
   boolean preserveLeadingWhitespace;
 
+  /** How the line a drain cut leads with, so the remaining fragment can still classify it. */
+  static final int CUT_LEAD_UNCUT = 0;
+  static final int CUT_LEAD_BLANK = 1;
+  static final int CUT_LEAD_RAW_HTML = 2;
+  static final int CUT_LEAD_ROW = 3;
+  static final int CUT_LEAD_CONTENT = 4;
+  static final int RAW_HTML_MAX_INDENT = 3;
+
+  int cutLineLeadKind = CUT_LEAD_UNCUT;
+  int cutLineLeadIndent;
+  /** Test switch: skip draining so on/off outputs can be compared. */
+  boolean disableDrain;
+
+  boolean retainsWholeDocument() {
+    return (cleanFlags & CLEAN_FRAGMENTS) != 0;
+  }
+
+  /**
+   * Whether output has left the buffer front, so {@link #flushedTail} describes the bytes
+   * immediately before {@code buffer[0]}.
+   *
+   * <p>Yielding alone is no evidence: until a drain actually cuts, the tail still holds its
+   * document-start sentinel, and reading it invents a newline that cancels a real block separator.
+   */
+  boolean hasFlushedTail() {
+    return cutLineLeadKind != CUT_LEAD_UNCUT;
+  }
+
   int cleanFlags;
   final boolean cleanUrls;
 

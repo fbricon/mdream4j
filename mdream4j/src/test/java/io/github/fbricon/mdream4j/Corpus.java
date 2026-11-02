@@ -16,11 +16,11 @@ import java.util.List;
 import java.util.Map;
 
 /** Loads {@code golden/corpus.jsonl} for the differential tests. */
-final class Corpus {
+public final class Corpus {
 
   private Corpus() {}
 
-  static List<Map<String, Object>> loadCases() throws IOException {
+  public static List<Map<String, Object>> loadCases() throws IOException {
     Path corpus = findCorpus();
     List<Map<String, Object>> cases = new ArrayList<>();
     for (String line : Files.readAllLines(corpus, StandardCharsets.UTF_8)) {
@@ -56,7 +56,7 @@ final class Corpus {
    * <p>Only the scalar options the corpus uses so far are mapped; a new option name fails loudly
    * instead of silently comparing against default-option output.
    */
-  static Options options(Map<String, Object> corpusCase, OutputFormat format) {
+  public static Options options(Map<String, Object> corpusCase, OutputFormat format) {
     Options.Builder builder = Options.builder().format(format);
     @SuppressWarnings("unchecked")
     Map<String, Object> options = (Map<String, Object>) corpusCase.get("options");

@@ -26,8 +26,19 @@ final class ConverterStream implements MarkdownStream {
   private boolean finished;
 
   ConverterStream(Options options) {
+    this(options, false);
+  }
+
+  /**
+   * Builds a stream with draining optionally disabled.
+   *
+   * <p>Drain is an optimisation that must never change the output, so the tests compare the two
+   * modes; mirrors {@code MarkdownStreamProcessor::new_drain_disabled}.
+   */
+  ConverterStream(Options options, boolean disableDrain) {
     this.state = new ConvertState(options, STREAM_START_CAPACITY);
     this.state.streaming = true;
+    this.state.disableDrain = disableDrain;
   }
 
   @Override
