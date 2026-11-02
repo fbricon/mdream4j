@@ -243,7 +243,7 @@ final class ParseOps {
       return true;
     }
     String hidden = node.attributes.get("hidden");
-    return hidden != null && !ConvertState.asciiEqualsIgnoreCase(hidden, "until-found");
+    return hidden != null && !Chars.asciiEqualsIgnoreCase(hidden, "until-found");
   }
 
   private static boolean styleHides(String style) {
@@ -396,7 +396,7 @@ final class ParseOps {
     String text = textBuffer.toString();
 
     if (captureTitle) {
-      String value = rustTrim(text);
+      String value = Chars.trimUnicode(text);
       if (!value.isEmpty()) {
         self.frontmatterTitle = value;
       }
@@ -427,7 +427,7 @@ final class ParseOps {
       int depth = self.depth;
       int index = parent != null ? parent.currentWalkIndex : 0;
       self.textBufferHasInlineGfmHazard = hasInlineGfmHazard;
-      if (self.link.emptyTextPending && !rustTrim(text).isEmpty()) {
+      if (self.link.emptyTextPending && !Chars.trimUnicode(text).isEmpty()) {
         self.link.emptyTextPending = false;
       }
       if (tailwindPrefix == null && tailwindSuffix == null) {
@@ -472,36 +472,6 @@ final class ParseOps {
     a.append(b);
     b.setLength(0);
     b.append(tmp);
-  }
-
-  static String rustTrim(String value) {
-    int start = 0;
-    int end = value.length();
-    while (start < end && isRustWhitespace(value.charAt(start))) {
-      start++;
-    }
-    while (end > start && isRustWhitespace(value.charAt(end - 1))) {
-      end--;
-    }
-    return value.substring(start, end);
-  }
-
-  static boolean isRustWhitespace(char c) {
-    return c == ' '
-        || c == '\t'
-        || c == '\n'
-        || c == '\r'
-        || c == 0x0C
-        || c == 0x0B
-        || c == 0x85
-        || c == 0xA0
-        || c == 0x1680
-        || (c >= 0x2000 && c <= 0x200A)
-        || c == 0x2028
-        || c == 0x2029
-        || c == 0x202F
-        || c == 0x205F
-        || c == 0x3000;
   }
 
   // === Tree recovery ===
@@ -1505,7 +1475,7 @@ final class ParseOps {
     if (builtin >= 0) {
       tagName = tagNameRaw;
     } else if (hasAsciiUpper(tagNameRaw)) {
-      tagName = asciiLower(tagNameRaw);
+      tagName = Chars.asciiLower(tagNameRaw);
     } else {
       tagName = tagNameRaw;
     }
@@ -1888,7 +1858,7 @@ final class ParseOps {
             carryBounded = true;
             break;
           }
-          if (ConvertState.asciiEqualsIgnoreCase(rawName, peekName)) {
+          if (Chars.asciiEqualsIgnoreCase(rawName, peekName)) {
             completeTextNode(self, textBuffer);
             runStart = i;
             CloseTagResult result = processClosingTag(self, chunk, i);
@@ -1940,7 +1910,7 @@ final class ParseOps {
             carryBounded = true;
             break;
           }
-          if (currentName != null && ConvertState.asciiEqualsIgnoreCase(currentName, peekName)) {
+          if (currentName != null && Chars.asciiEqualsIgnoreCase(currentName, peekName)) {
             completeTextNode(self, textBuffer);
             runStart = i;
             CloseTagResult result = processClosingTag(self, chunk, i);
@@ -2034,7 +2004,7 @@ final class ParseOps {
           break;
         }
         i += end;
-      } else if (!isAsciiAlphabetic(next)) {
+      } else if (!Chars.isAsciiAlphabetic(next)) {
         int beforeLen = textBuffer.length();
         self.truncated |= pushCappedTextNode(textBuffer, "<", maxNodeBytes, self);
         if (textBuffer.length() != beforeLen) {
@@ -2063,7 +2033,7 @@ final class ParseOps {
         if (builtin >= 0) {
           tagName = tagNameRaw;
         } else if (hasAsciiUpper(tagNameRaw)) {
-          tagName = asciiLower(tagNameRaw);
+          tagName = Chars.asciiLower(tagNameRaw);
         } else {
           tagName = tagNameRaw;
         }
@@ -2368,10 +2338,6 @@ final class ParseOps {
         && expected.regionMatches(0, candidate, 0, candidate.length());
   }
 
-  static boolean isAsciiAlphabetic(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-  }
-
   static boolean hasAsciiUpper(String value) {
     for (int i = 0; i < value.length(); i++) {
       char c = value.charAt(i);
@@ -2380,15 +2346,6 @@ final class ParseOps {
       }
     }
     return false;
-  }
-
-  static String asciiLower(String value) {
-    StringBuilder out = new StringBuilder(value.length());
-    for (int i = 0; i < value.length(); i++) {
-      char c = value.charAt(i);
-      out.append(c >= 'A' && c <= 'Z' ? (char) (c + ('a' - 'A')) : c);
-    }
-    return out.toString();
   }
 
   static byte[] utf8(String value) {

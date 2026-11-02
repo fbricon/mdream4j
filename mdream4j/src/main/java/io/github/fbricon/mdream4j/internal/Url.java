@@ -76,7 +76,7 @@ public final class Url {
       if (b == '\t' || b == '\n' || b == '\r') {
         continue;
       }
-      if (!asciiEqualsIgnoreCase(b, scheme.charAt(matched))) {
+      if (!Chars.asciiEqualsIgnoreCase(b, scheme.charAt(matched))) {
         return false;
       }
       matched++;
@@ -117,7 +117,7 @@ public final class Url {
     if (rest.isEmpty()) {
       return false;
     }
-    char first = asciiLower(rest.charAt(0));
+    char first = Chars.asciiLower(rest.charAt(0));
     if (first == '#') {
       return rest.length() == 1;
     }
@@ -168,7 +168,7 @@ public final class Url {
         continue;
       }
       if (b == ':') {
-        char first = asciiLower(rest.charAt(0));
+        char first = Chars.asciiLower(rest.charAt(0));
         if (first == 'h') {
           return schemeMatches(rest, "http:") || schemeMatches(rest, "https:");
         }
@@ -256,10 +256,10 @@ public final class Url {
 
     StringBuilder out = new StringBuilder(url);
     // Long queries go straight to compaction to avoid a second scan.
-    if (utf8Length(out, queryStart, queryEnd) <= 1024) {
+    if (Scan.utf8Length(out, queryStart, queryEnd) <= 1024) {
       int end = queryEnd;
       int removed = 0;
-      int moveBudget = utf8Length(out, 0, out.length());
+      int moveBudget = Scan.utf8Length(out, 0, out.length());
       while (true) {
         int amp = lastIndexOf(out, '&', queryStart, end);
         int start = amp < 0 ? queryStart : amp + 1;
@@ -279,7 +279,7 @@ public final class Url {
             rangeStart = start;
             rangeEnd = Math.min(end + 1, queryEnd);
           }
-          int moved = utf8Length(out, 0, out.length()) - utf8Length(out, 0, rangeEnd);
+          int moved = Scan.utf8Length(out, 0, out.length()) - Scan.utf8Length(out, 0, rangeEnd);
           if (moved > moveBudget) {
             break;
           }
@@ -357,11 +357,11 @@ public final class Url {
     if (end < len && bytes[end] == '/') {
       end += 1;
     }
-    if (end >= len || !isAsciiAlphabetic(bytes[end])) {
+    if (end >= len || !Chars.isAsciiAlphabetic((char) bytes[end])) {
       return -1;
     }
     end += 1;
-    while (end < len && (isAsciiAlphanumeric(bytes[end]) || bytes[end] == '-')) {
+    while (end < len && (Chars.isAsciiAlphanumeric((char) bytes[end]) || bytes[end] == '-')) {
       end += 1;
     }
     if (end >= len) {
@@ -510,7 +510,7 @@ public final class Url {
       }
     }
 
-    String trimmed = rustTrim(cleaned);
+    String trimmed = Chars.trimUnicode(cleaned);
     StringBuilder slug = new StringBuilder(trimmed.length());
     boolean lastWasDash = false;
     for (int j = 0; j < trimmed.length(); j++) {
@@ -553,33 +553,6 @@ public final class Url {
       }
     }
     return -(lo + 1);
-  }
-
-  /** Rust's {@code str::trim}: strips the Unicode {@code White_Space} set. */
-  private static String rustTrim(CharSequence s) {
-    int start = 0;
-    int end = s.length();
-    while (start < end && isRustWhitespace(s.charAt(start))) {
-      start++;
-    }
-    while (end > start && isRustWhitespace(s.charAt(end - 1))) {
-      end--;
-    }
-    return s.subSequence(start, end).toString();
-  }
-
-  private static boolean isRustWhitespace(char c) {
-    return (c >= '\t' && c <= '\r')
-        || c == ' '
-        || c == '\u0085'
-        || c == '\u00a0'
-        || c == '\u1680'
-        || (c >= '\u2000' && c <= '\u200a')
-        || c == '\u2028'
-        || c == '\u2029'
-        || c == '\u202f'
-        || c == '\u205f'
-        || c == '\u3000';
   }
 
   /** Query and fragment take no part in resolution, so the split drops them. */
@@ -654,7 +627,7 @@ public final class Url {
     int segmentStart = 0;
     boolean dot = false;
     // A scheme opens with a letter; every byte so far could still belong to one.
-    boolean schemeChars = bytes.length > 0 && isAsciiAlphabetic(bytes[0]);
+    boolean schemeChars = bytes.length > 0 && Chars.isAsciiAlphabetic((char) bytes[0]);
     while (i < bytes.length) {
       byte b = bytes[i];
       if (b == '?' || b == '#') {
@@ -787,7 +760,7 @@ public final class Url {
       host = host.substring(0, colon);
     }
     boolean usable =
-        (asciiEqualsIgnoreCase(scheme, "http") || asciiEqualsIgnoreCase(scheme, "https"))
+        (Chars.asciiEqualsIgnoreCase(scheme, "http") || Chars.asciiEqualsIgnoreCase(scheme, "https"))
             && !host.isEmpty();
     return usable ? resolved : null;
   }
@@ -839,35 +812,6 @@ public final class Url {
       return stripTrackingParams(url);
     }
     return url;
-  }
-
-  private static char asciiLower(char c) {
-    return (c >= 'A' && c <= 'Z') ? (char) (c + ('a' - 'A')) : c;
-  }
-
-  private static boolean asciiEqualsIgnoreCase(char a, char b) {
-    return asciiLower(a) == asciiLower(b);
-  }
-
-  private static boolean asciiEqualsIgnoreCase(String a, String b) {
-    int len = a.length();
-    if (len != b.length()) {
-      return false;
-    }
-    for (int i = 0; i < len; i++) {
-      if (!asciiEqualsIgnoreCase(a.charAt(i), b.charAt(i))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private static boolean isAsciiAlphabetic(byte b) {
-    return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z');
-  }
-
-  private static boolean isAsciiAlphanumeric(byte b) {
-    return isAsciiAlphabetic(b) || (b >= '0' && b <= '9');
   }
 
   private static int indexOf(CharSequence s, char c, int from, int to) {
@@ -948,26 +892,5 @@ public final class Url {
       }
     }
     return true;
-  }
-
-  /** UTF-8 length of {@code s[from, to)}, matching {@code String.getBytes(UTF_8)}. */
-  private static int utf8Length(CharSequence s, int from, int to) {
-    int len = 0;
-    for (int i = from; i < to; i++) {
-      char c = s.charAt(i);
-      if (c < 0x80) {
-        len += 1;
-      } else if (c < 0x800) {
-        len += 2;
-      } else if (Character.isHighSurrogate(c)
-          && i + 1 < to
-          && Character.isLowSurrogate(s.charAt(i + 1))) {
-        len += 4;
-        i += 1;
-      } else {
-        len += 3;
-      }
-    }
-    return len;
   }
 }

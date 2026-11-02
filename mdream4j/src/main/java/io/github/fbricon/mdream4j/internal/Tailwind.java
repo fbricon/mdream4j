@@ -67,14 +67,14 @@ public final class Tailwind {
     final int length = classesAttr.length();
     int index = 0;
     while (index < length) {
-      while (index < length && isRustWhitespace(classesAttr.charAt(index))) {
+      while (index < length && Chars.isUnicodeWhitespace(classesAttr.charAt(index))) {
         index++;
       }
       if (index >= length) {
         break;
       }
       int start = index;
-      while (index < length && !isRustWhitespace(classesAttr.charAt(index))) {
+      while (index < length && !Chars.isUnicodeWhitespace(classesAttr.charAt(index))) {
         index++;
       }
       int end = index;
@@ -248,29 +248,6 @@ public final class Tailwind {
   private static boolean isEnabled(long state, int slot) {
     long current = (state >>> (slot * 4)) & SLOT_MASK;
     return current != SLOT_UNSET && (current & VALUE_BIT) != 0L;
-  }
-
-  /** Matches Rust's {@code char::is_whitespace} (Unicode {@code White_Space}). */
-  private static boolean isRustWhitespace(char c) {
-    switch (c) {
-      case '\t':
-      case '\n':
-      case '\u000B':
-      case '\f':
-      case '\r':
-      case ' ':
-      case '\u0085':
-      case '\u00A0':
-      case '\u1680':
-      case '\u2028':
-      case '\u2029':
-      case '\u202F':
-      case '\u205F':
-      case '\u3000':
-        return true;
-      default:
-        return c >= '\u2000' && c <= '\u200A';
-    }
   }
 
   /** Markdown delimiters and visibility produced by {@link #processTailwindClasses}. */

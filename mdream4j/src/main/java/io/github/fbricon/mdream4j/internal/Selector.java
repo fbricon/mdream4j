@@ -39,7 +39,7 @@ final class Selector {
 
   /** Parses a comma-separated selector list while preserving attribute values. */
   static ParsedSelector parseSelectorList(String selector) {
-    String trimmed = trimAscii(selector);
+    String trimmed = Chars.trimAscii(selector);
     if (trimmed.isEmpty()) {
       return parseSelector(trimmed);
     }
@@ -58,7 +58,7 @@ final class Selector {
         }
         index = end;
       } else if (c == ',') {
-        String part = trimAscii(trimmed.substring(start, index));
+        String part = Chars.trimAscii(trimmed.substring(start, index));
         if (part.isEmpty()) {
           return ParsedSelector.tag(trimmed);
         }
@@ -72,7 +72,7 @@ final class Selector {
       return parseSelector(trimmed);
     }
 
-    String last = trimAscii(trimmed.substring(start));
+    String last = Chars.trimAscii(trimmed.substring(start));
     if (last.isEmpty()) {
       return ParsedSelector.tag(trimmed);
     }
@@ -81,7 +81,7 @@ final class Selector {
   }
 
   static ParsedSelector parseSelector(String selector) {
-    String trimmed = trimAscii(selector);
+    String trimmed = Chars.trimAscii(selector);
     if (trimmed.isEmpty()) {
       return ParsedSelector.tag("");
     }
@@ -143,19 +143,19 @@ final class Selector {
     if (s.length() < 2) {
       return ParsedSelector.tag(s);
     }
-    String inner = trimAscii(s.substring(1, s.length() - 1));
+    String inner = Chars.trimAscii(s.substring(1, s.length() - 1));
     int eqIndex = inner.indexOf('=');
     if (eqIndex >= 0) {
       int opStart =
           eqIndex > 0 && isOperatorChar(inner.charAt(eqIndex - 1)) ? eqIndex - 1 : eqIndex;
-      String val = trimAscii(inner.substring(eqIndex + 1));
+      String val = Chars.trimAscii(inner.substring(eqIndex + 1));
       if (val.length() >= 2
           && (val.charAt(0) == '"' || val.charAt(0) == '\'')
           && val.charAt(0) == val.charAt(val.length() - 1)) {
         val = val.substring(1, val.length() - 1);
       }
       return ParsedSelector.attribute(
-          trimAscii(inner.substring(0, opStart)), inner.substring(opStart, eqIndex + 1), val);
+          Chars.trimAscii(inner.substring(0, opStart)), inner.substring(opStart, eqIndex + 1), val);
     }
     return ParsedSelector.attribute(inner, null, null);
   }
@@ -245,11 +245,11 @@ final class Selector {
     int index = 0;
     int len = value.length();
     while (index < len) {
-      while (index < len && isAsciiWhitespace(value.charAt(index))) {
+      while (index < len && Chars.isAsciiWhitespace(value.charAt(index))) {
         index++;
       }
       int start = index;
-      while (index < len && !isAsciiWhitespace(value.charAt(index))) {
+      while (index < len && !Chars.isAsciiWhitespace(value.charAt(index))) {
         index++;
       }
       if (index > start) {
@@ -257,22 +257,5 @@ final class Selector {
       }
     }
     return words;
-  }
-
-  private static boolean isAsciiWhitespace(char c) {
-    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == 0x0C;
-  }
-
-  /** Rust's {@code str::trim_ascii}: strips ASCII whitespace on both ends. */
-  static String trimAscii(String value) {
-    int start = 0;
-    int end = value.length();
-    while (start < end && isAsciiWhitespace(value.charAt(start))) {
-      start++;
-    }
-    while (end > start && isAsciiWhitespace(value.charAt(end - 1))) {
-      end--;
-    }
-    return value.substring(start, end);
   }
 }

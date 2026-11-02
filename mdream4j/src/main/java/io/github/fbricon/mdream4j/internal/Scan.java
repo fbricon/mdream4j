@@ -27,9 +27,6 @@ final class Scan {
   private static final int NON_WHITESPACE_STOP = 4;
   private static final int TAG_NAME_STOP = 8;
 
-  private static final long WHITESPACE_MASK =
-      (1L << 9) | (1L << 10) | (1L << 12) | (1L << 13) | (1L << 32);
-
   /** Packed stop-set bits for every byte value. */
   private static final int[] SCAN_CLASS = buildScanClass();
 
@@ -39,7 +36,7 @@ final class Scan {
 
   /** Whitespace check optimized for the hot character loop. */
   static boolean isWhitespace(char c) {
-    return c <= 32 && ((WHITESPACE_MASK >>> c) & 1) == 1;
+    return Chars.isAsciiWhitespace(c);
   }
 
   private static int[] buildScanClass() {
@@ -81,9 +78,12 @@ final class Scan {
 
   /** UTF-8 byte length of a char range, matching Rust's {@code str::len()}. */
   static int utf8Length(CharSequence text) {
+    return utf8Length(text, 0, text.length());
+  }
+
+  static int utf8Length(CharSequence text, int start, int end) {
     int length = 0;
-    int len = text.length();
-    for (int i = 0; i < len; i++) {
+    for (int i = start; i < end; i++) {
       char c = text.charAt(i);
       if (c < 0x80) {
         length += 1;
@@ -91,7 +91,7 @@ final class Scan {
         length += 2;
       } else if (Character.isSurrogate(c)) {
         if (Character.isHighSurrogate(c)
-            && i + 1 < len
+            && i + 1 < end
             && Character.isLowSurrogate(text.charAt(i + 1))) {
           length += 4;
           i++;
@@ -103,10 +103,6 @@ final class Scan {
       }
     }
     return length;
-  }
-
-  static int utf8Length(CharSequence text, int start, int end) {
-    return utf8Length(text.subSequence(start, end));
   }
 
   static final class CommentResult {
@@ -573,25 +569,10 @@ final class Scan {
     // A known name is fully described by `bit`; only the `ATTR_ALL` long tail
     // needs an owned, lowercased copy. Values decode into a recycled buffer.
     if (bit == Consts.ATTR_NONE) {
-      result.insertCustom(asciiLower(raw), value);
+      result.insertCustom(Chars.asciiLower(raw), value);
     } else {
       result.insertKnown(bit, value);
     }
-  }
-
-  private static String asciiLower(String value) {
-    int len = value.length();
-    StringBuilder out = null;
-    for (int i = 0; i < len; i++) {
-      char c = value.charAt(i);
-      if (c >= 'A' && c <= 'Z') {
-        if (out == null) {
-          out = new StringBuilder(value);
-        }
-        out.setCharAt(i, (char) (c + ('a' - 'A')));
-      }
-    }
-    return out == null ? value : out.toString();
   }
 
   /** Attribute extraction fed one char at a time by the tag scan. */

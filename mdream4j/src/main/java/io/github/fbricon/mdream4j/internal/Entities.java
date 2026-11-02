@@ -248,7 +248,7 @@ public final class Entities {
       int nameStart = i + 1;
       int nameEnd = nameStart;
       int scanEnd = Math.min(len, nameStart + MAX_ENTITY_NAME_LENGTH);
-      while (nameEnd < scanEnd && isAsciiAlphanumeric(text.charAt(nameEnd))) {
+      while (nameEnd < scanEnd && Chars.isAsciiAlphanumeric(text.charAt(nameEnd))) {
         nameEnd++;
       }
 
@@ -275,7 +275,7 @@ public final class Entities {
           boolean hasNext = legacyEnd < len;
           char next = hasNext ? text.charAt(legacyEnd) : 0;
           boolean ambiguousAttribute =
-              inAttribute && hasNext && (next == '=' || isAsciiAlphanumeric(next));
+              inAttribute && hasNext && (next == '=' || Chars.isAsciiAlphanumeric(next));
           if (!ambiguousAttribute) {
             if (copied == 0) {
               out.ensureCapacity(len);
@@ -364,7 +364,7 @@ public final class Entities {
     }
 
     int nameStart = index;
-    while (index < len && isAsciiAlphanumeric(text.charAt(index))) {
+    while (index < len && Chars.isAsciiAlphanumeric(text.charAt(index))) {
       index++;
     }
     return index > nameStart && index < len && text.charAt(index) == ';';
@@ -393,10 +393,6 @@ public final class Entities {
       }
     }
     return len;
-  }
-
-  private static boolean isAsciiAlphanumeric(int c) {
-    return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
   }
 
   private static boolean isAsciiDigit(int c) {

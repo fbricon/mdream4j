@@ -384,11 +384,11 @@ class TailwindTest {
     int index = 0;
     int length = value.length();
     while (index < length) {
-      while (index < length && isAsciiWhitespace(value.charAt(index))) {
+      while (index < length && Chars.isUnicodeWhitespace(value.charAt(index))) {
         index++;
       }
       int start = index;
-      while (index < length && !isAsciiWhitespace(value.charAt(index))) {
+      while (index < length && !Chars.isUnicodeWhitespace(value.charAt(index))) {
         index++;
       }
       if (index > start) {
@@ -396,10 +396,6 @@ class TailwindTest {
       }
     }
     return tokens;
-  }
-
-  private static boolean isAsciiWhitespace(char c) {
-    return c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r';
   }
 
   private static final class Reference {

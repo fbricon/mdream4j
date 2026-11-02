@@ -99,24 +99,6 @@ final class OutputOps {
     return table;
   }
 
-  private static boolean hasVisible(String value) {
-    for (int i = 0; i < value.length(); i++) {
-      if (!Scan.isWhitespace(value.charAt(i))) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private static boolean allRustWhitespace(String value) {
-    for (int i = 0; i < value.length(); i++) {
-      if (!Scan.isWhitespace(value.charAt(i))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   private static String joinGenerated(String prefix, String text, String suffix) {
     return prefix + text + suffix;
   }
@@ -202,7 +184,7 @@ final class OutputOps {
       int end = start;
       while (end < len) {
         char c = className.charAt(end);
-        if (c == ' ' || c == '\t' || c == '\n' || c == 0x0C || c == '\r') {
+        if (Chars.isAsciiWhitespace(c)) {
           break;
         }
         end++;
@@ -675,7 +657,7 @@ final class OutputOps {
               || (c == '>' && inBlockquote)
               || (c == '<'
                   && index + 1 < len
-                  && (isAsciiAlphabetic(text.charAt(index + 1))
+                  && (Chars.isAsciiAlphabetic(text.charAt(index + 1))
                       || text.charAt(index + 1) == '!'
                       || text.charAt(index + 1) == '/'
                       || text.charAt(index + 1) == '?'));
@@ -735,10 +717,6 @@ final class OutputOps {
       return out.toString();
     }
     return null;
-  }
-
-  private static boolean isAsciiAlphabetic(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
   }
 
   private static boolean collapsesIntoSpace(String text, int lastChar) {
@@ -803,14 +781,14 @@ final class OutputOps {
     } else if (!keepsMarkers
         && !self.openMarkers.isEmpty()
         && output != null
-        && hasVisible(output)) {
+        && Chars.hasVisible(output)) {
       self.openMarkers.clear();
     }
   }
 
   private static void releaseMarkersOnExit(ConvertState self, boolean closesBlock, String output) {
     if (!self.openMarkers.isEmpty()
-        && (closesBlock || (output != null && hasVisible(output)))) {
+        && (closesBlock || (output != null && Chars.hasVisible(output)))) {
       self.openMarkers.clear();
     }
   }
@@ -843,13 +821,7 @@ final class OutputOps {
   }
 
   private static boolean allWhitespaceFrom(StringBuilder buffer, int start) {
-    int from = Math.max(0, start);
-    for (int i = from; i < buffer.length(); i++) {
-      if (!Scan.isWhitespace(buffer.charAt(i))) {
-        return false;
-      }
-    }
-    return true;
+    return !Chars.hasVisible(buffer, Math.max(0, start), buffer.length());
   }
 
   /** Settle a pending empty-text link once visible text follows it. */
@@ -860,14 +832,7 @@ final class OutputOps {
     }
     if (outputStart <= self.buffer.length()) {
       String content = self.buffer.substring(outputStart);
-      boolean visible = false;
-      for (int i = 0; i < content.length(); i++) {
-        if (!Scan.isWhitespace(content.charAt(i))) {
-          visible = true;
-          break;
-        }
-      }
-      if (visible) {
+      if (Chars.hasVisible(content)) {
         self.link.emptyTextPending = false;
       }
     }
@@ -876,7 +841,7 @@ final class OutputOps {
   private static void finishTextNode(
       ConvertState self, String text, boolean containsWhitespace, int depth, int index) {
     if (!self.openMarkers.isEmpty() || self.heldBreakBytes != 0) {
-      if (hasVisible(text)) {
+      if (Chars.hasVisible(text)) {
         self.openMarkers.clear();
         self.heldBreakBytes = 0;
       }
@@ -987,11 +952,11 @@ final class OutputOps {
           return;
         }
       }
-      boolean visible = hasVisible(text);
-      if (!visible && generatedPrefix != null && hasVisible(generatedPrefix)) {
+      boolean visible = Chars.hasVisible(text);
+      if (!visible && generatedPrefix != null && Chars.hasVisible(generatedPrefix)) {
         visible = true;
       }
-      if (!visible && generatedSuffix != null && hasVisible(generatedSuffix)) {
+      if (!visible && generatedSuffix != null && Chars.hasVisible(generatedSuffix)) {
         visible = true;
       }
       if (ownsLeadingSpace && !visible) {
@@ -1011,14 +976,7 @@ final class OutputOps {
     }
 
     if (self.listRulePending) {
-      boolean allWhitespace = true;
-      for (int i = 0; i < text.length(); i++) {
-        if (!Scan.isWhitespace(text.charAt(i))) {
-          allWhitespace = false;
-          break;
-        }
-      }
-      if (allWhitespace) {
+      if (!Chars.hasVisible(text)) {
         return;
       }
       flushListRule(self);
@@ -1026,14 +984,7 @@ final class OutputOps {
 
     boolean relocatedSpace = false;
     if (self.pendingInlineWhitespace) {
-      boolean allWhitespace = true;
-      for (int i = 0; i < text.length(); i++) {
-        if (!Scan.isWhitespace(text.charAt(i))) {
-          allWhitespace = false;
-          break;
-        }
-      }
-      if (allWhitespace) {
+      if (!Chars.hasVisible(text)) {
         return;
       }
       int last = lastOutputByte(self);
@@ -2337,7 +2288,7 @@ final class OutputOps {
   private static void finishRawHtmlBlock(ConvertState self, String value, boolean indent) {
     if (!self.pendingRawHtmlBoundary
         || self.inRawHtmlBlock()
-        || !hasVisible(value)) {
+        || !Chars.hasVisible(value)) {
       return;
     }
     int newlines = 0;
@@ -2548,7 +2499,7 @@ final class OutputOps {
     }
     ConvertState.BlockquoteFrame frame = self.blockquotes.remove(self.blockquotes.size() - 1);
     int contentEnd = self.buffer.length();
-    while (contentEnd > 0 && isAsciiWhitespace(self.buffer.charAt(contentEnd - 1))) {
+    while (contentEnd > 0 && Chars.isAsciiWhitespace(self.buffer.charAt(contentEnd - 1))) {
       contentEnd--;
     }
     if (contentEnd < frame.contentStart) {
@@ -2776,14 +2727,7 @@ final class OutputOps {
       if (frame.state != ConvertState.CAPTION_TENTATIVE) {
         continue;
       }
-      boolean visible = false;
-      for (int i = frame.tentativeContentStart; i < self.buffer.length(); i++) {
-        if (!Scan.isWhitespace(self.buffer.charAt(i))) {
-          visible = true;
-          break;
-        }
-      }
-      if (visible) {
+      if (Chars.hasVisible(self.buffer, frame.tentativeContentStart, self.buffer.length())) {
         continue;
       }
       frame.state = ConvertState.CAPTION_PENDING;
@@ -2903,7 +2847,7 @@ final class OutputOps {
       String cache = self.buffer.substring(start);
       String trimmedTitle = title;
       int titleEnd = trimmedTitle.length();
-      while (titleEnd > 0 && isAsciiWhitespace(trimmedTitle.charAt(titleEnd - 1))) {
+      while (titleEnd > 0 && Chars.isAsciiWhitespace(trimmedTitle.charAt(titleEnd - 1))) {
         titleEnd--;
       }
       if (cache.equals(trimmedTitle.substring(0, titleEnd))) {
@@ -2972,7 +2916,7 @@ final class OutputOps {
       if (!self.openMarkers.isEmpty()
           && (self.cleanFlags & ConvertState.CLEAN_EMPTY_LINK_TEXT) == 0
           && output != null
-          && hasVisible(output)) {
+          && Chars.hasVisible(output)) {
         self.openMarkers.clear();
       }
       if (!isInline && !self.openMarkers.isEmpty()) {
@@ -3177,7 +3121,7 @@ final class OutputOps {
     boolean captionActive =
         self.captionBoundary != ConvertState.CAPTION_BOUNDARY_NONE || !self.captionFrames.isEmpty();
     boolean captionVisibleOutput =
-        captionActive && output != null && hasVisible(output);
+        captionActive && output != null && Chars.hasVisible(output);
     boolean defaultInlineMarker =
         !enterIsLiteral && captionVisibleOutput && inlineMarkerType(tagId) != 0;
     boolean tentativeCaptionOutput =
@@ -3226,7 +3170,7 @@ final class OutputOps {
         && configuredNewLines == 0
         && output != null
         && !output.isEmpty()
-        && allRustWhitespace(output)
+        && !Chars.hasVisible(output)
         && tryDeferCaptionBreak(self, output)) {
       self.pendingInlineWhitespace = false;
       self.lastTextNodeContainsWhitespace = false;
@@ -3239,7 +3183,7 @@ final class OutputOps {
         && tagId == Consts.TAG_BR
         && configuredNewLines == 0
         && output != null
-        && allRustWhitespace(output)) {
+        && !Chars.hasVisible(output)) {
       for (ConvertState.CaptionFrame frame : self.captionFrames) {
         if (frame.state != ConvertState.CAPTION_COMMITTED) {
           frame.hasInternalBreak = true;
@@ -3263,7 +3207,7 @@ final class OutputOps {
         && output != null
         && self.buffer.length() > outputStart
         && self.lastContentCacheLen == output.length()
-        && (!self.plainText || hasVisible(output))) {
+        && (!self.plainText || Chars.hasVisible(output))) {
       markRenderedChildContent(self);
     }
 
@@ -3352,7 +3296,7 @@ final class OutputOps {
       if (!self.openMarkers.isEmpty()
           && (self.cleanFlags & ConvertState.CLEAN_EMPTY_LINK_TEXT) == 0
           && output != null
-          && hasVisible(output)) {
+          && Chars.hasVisible(output)) {
         self.openMarkers.clear();
       }
       if (!node.isInline && !self.openMarkers.isEmpty()) {
@@ -3521,7 +3465,7 @@ final class OutputOps {
             || !self.captionFrames.isEmpty();
     String captionCandidate = tableSeparator != null ? tableSeparator : output;
     boolean captionVisibleOutput =
-        captionActive && captionCandidate != null && hasVisible(captionCandidate);
+        captionActive && captionCandidate != null && Chars.hasVisible(captionCandidate);
     boolean defaultInlineMarker =
         !hasOverride && captionVisibleOutput && inlineMarkerType(tagId) != 0;
     boolean consumesCaptionBoundary = false;
@@ -3755,11 +3699,11 @@ final class OutputOps {
             String align = node.attributes.getBit(Consts.ATTR_ALIGN);
             if (align != null) {
               String normalized = "";
-              if (asciiEqualsIgnoreCase(align, "left")) {
+              if (Chars.asciiEqualsIgnoreCase(align, "left")) {
                 normalized = "left";
-              } else if (asciiEqualsIgnoreCase(align, "center")) {
+              } else if (Chars.asciiEqualsIgnoreCase(align, "center")) {
                 normalized = "center";
-              } else if (asciiEqualsIgnoreCase(align, "right")) {
+              } else if (Chars.asciiEqualsIgnoreCase(align, "right")) {
                 normalized = "right";
               }
               if (!normalized.isEmpty()) {
@@ -3861,26 +3805,6 @@ final class OutputOps {
           break;
       }
     }
-  }
-
-  private static boolean asciiEqualsIgnoreCase(String value, String expected) {
-    if (value.length() != expected.length()) {
-      return false;
-    }
-    for (int i = 0; i < value.length(); i++) {
-      char a = value.charAt(i);
-      char b = expected.charAt(i);
-      if (a >= 'A' && a <= 'Z') {
-        a = (char) (a + ('a' - 'A'));
-      }
-      if (b >= 'A' && b <= 'Z') {
-        b = (char) (b + ('a' - 'A'));
-      }
-      if (a != b) {
-        return false;
-      }
-    }
-    return true;
   }
 
   // === Empty item guard ===
@@ -4036,10 +3960,6 @@ final class OutputOps {
 
   // === Final output ===
 
-  private static boolean isAsciiWhitespace(char c) {
-    return c == ' ' || c == '\t' || c == '\n' || c == 0x0C || c == '\r';
-  }
-
   /**
    * Final output: trailing ASCII whitespace, then leading whitespace unless it is content.
    * Mirrors {@code get_markdown} in {@code convert/mod.rs}.
@@ -4051,13 +3971,13 @@ final class OutputOps {
       return out;
     }
     int end = self.buffer.length();
-    while (end > 0 && isAsciiWhitespace(self.buffer.charAt(end - 1))) {
+    while (end > 0 && Chars.isAsciiWhitespace(self.buffer.charAt(end - 1))) {
       end--;
     }
     truncateBuffer(self, end);
     if (!self.preserveLeadingWhitespace) {
       int start = 0;
-      while (start < self.buffer.length() && ParseOps.isRustWhitespace(self.buffer.charAt(start))) {
+      while (start < self.buffer.length() && Chars.isUnicodeWhitespace(self.buffer.charAt(start))) {
         start++;
       }
       if (start > 0) {

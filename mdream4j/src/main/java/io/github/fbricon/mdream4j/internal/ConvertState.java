@@ -428,7 +428,7 @@ final class ConvertState {
   }
 
   boolean matchesOpaqueTag(String tagName) {
-    return overflowOpaqueName != null && asciiEqualsIgnoreCase(overflowOpaqueName, tagName);
+    return overflowOpaqueName != null && Chars.asciiEqualsIgnoreCase(overflowOpaqueName, tagName);
   }
 
   void updateInPreOnClose(int id) {
@@ -495,26 +495,6 @@ final class ConvertState {
     }
     long number = (long) start + index;
     return (int) Math.min(number, MAX_ORDERED_START);
-  }
-
-  static boolean asciiEqualsIgnoreCase(String a, String b) {
-    if (a.length() != b.length()) {
-      return false;
-    }
-    for (int i = 0; i < a.length(); i++) {
-      char ca = a.charAt(i);
-      char cb = b.charAt(i);
-      if (ca >= 'A' && ca <= 'Z') {
-        ca = (char) (ca + ('a' - 'A'));
-      }
-      if (cb >= 'A' && cb <= 'Z') {
-        cb = (char) (cb + ('a' - 'A'));
-      }
-      if (ca != cb) {
-        return false;
-      }
-    }
-    return true;
   }
 
   private static long excludeTagTable(List<ParsedSelectorEntry> selectors) {
