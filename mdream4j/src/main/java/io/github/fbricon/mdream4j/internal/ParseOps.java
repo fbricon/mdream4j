@@ -2146,6 +2146,9 @@ final class ParseOps {
           }
           if (Chars.asciiEqualsIgnoreCase(rawName, peekName)) {
             completeTextNode(self, textBuffer);
+            if (self.heldOutputExceeded) {
+              return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+            }
             runStart = i;
             CloseTagResult result = processClosingTag(self, chunk, i);
             if (result.complete) {
@@ -2198,6 +2201,9 @@ final class ParseOps {
           }
           if (currentName != null && Chars.asciiEqualsIgnoreCase(currentName, peekName)) {
             completeTextNode(self, textBuffer);
+            if (self.heldOutputExceeded) {
+              return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+            }
             runStart = i;
             CloseTagResult result = processClosingTag(self, chunk, i);
             if (result.complete) {
@@ -2238,6 +2244,9 @@ final class ParseOps {
           if (cdataEnd >= 0) {
             int tokenLen = cdataEnd + 3 - i;
             completeTextNode(self, textBuffer);
+            if (self.heldOutputExceeded) {
+              return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+            }
             runStart = i;
             if (maxNodeBytes == 0 || tokenLen <= maxNodeBytes) {
               processCdataSection(self, chunk.substring(i + 9, cdataEnd));
@@ -2259,6 +2268,9 @@ final class ParseOps {
           break;
         }
         completeTextNode(self, textBuffer);
+        if (self.heldOutputExceeded) {
+          return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+        }
         runStart = i;
         if (cdata) {
           discardDeclaration(self, chunk.substring(i));
@@ -2277,6 +2289,9 @@ final class ParseOps {
         }
       } else if (next == '/') {
         completeTextNode(self, textBuffer);
+        if (self.heldOutputExceeded) {
+          return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+        }
         runStart = i;
         CloseTagResult result = processClosingTag(self, chunk, i);
         if (result.complete) {
@@ -2289,6 +2304,9 @@ final class ParseOps {
         }
       } else if (next == '?') {
         completeTextNode(self, textBuffer);
+        if (self.heldOutputExceeded) {
+          return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+        }
         runStart = i;
         int end = chunk.indexOf('>', i);
         if (end < 0) {
@@ -2345,6 +2363,9 @@ final class ParseOps {
         i2 = tagNameEnd;
 
         completeTextNode(self, textBuffer);
+        if (self.heldOutputExceeded) {
+          return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+        }
         runStart = i;
 
         OpeningTagResult result = processOpeningTag(self, name, tagId, isBuiltin, chunk, i2);
