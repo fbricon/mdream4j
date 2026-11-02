@@ -2,7 +2,8 @@
 
 Status: proposal, 2026-11-02 (rev 2).
 Companion research: [`REPORT.md`](./REPORT.md) (FFM mechanics and measurements).
-Port source: `/Users/fbricon/Dev/souk/mdream` @ `v2.0.3` (`55937d7c`, MIT).
+Port source: `mdream` npm **2.0.3**, the released state at `55937d7c` (MIT). Note: the
+`v2.0.3` git tag (`a7a8802`) is 66 commits earlier and is **not** the parity target.
 
 **Rev 2 changes:** byte-identical parity is now a hard requirement; Java **11** is the bytecode
 baseline; **GraalVM native-image** is a hard requirement; consumer analysis for **lemminx** and
@@ -420,8 +421,9 @@ the instruction to preserve branch order and magic constants.
 
 ### 9.2 Upstream sync
 
-Pin `v2.0.3`. Quarterly: checkout new tag → regenerate goldens → run Java suite → publish a
-behaviour diff. Adopt one upstream PR per commit. Treat it as a fork with a sync process.
+Pin the released `mdream` 2.0.3 state at `55937d7c` (the `v2.0.3` tag is 66 commits earlier).
+Quarterly: checkout new tag → regenerate goldens → run Java suite → publish a behaviour diff.
+Adopt one upstream PR per commit. Treat it as a fork with a sync process.
 
 ---
 

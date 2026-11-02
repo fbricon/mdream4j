@@ -1,0 +1,4 @@
+[submodule "tools/upstream"]
+	path = tools/upstream
+	url = https://github.com/harlan-zw/mdream
+	shallow = true

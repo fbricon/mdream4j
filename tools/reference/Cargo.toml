@@ -1,0 +1,23 @@
+[package]
+name = "mdream-reference"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Test-only reference bridge to the upstream Rust mdream core"
+
+[lib]
+name = "mdream_reference"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "mdream-golden"
+path = "src/bin/golden.rs"
+
+[dependencies]
+mdream = { path = "../upstream/crates/core", default-features = false, features = [
+  "markdown",
+  "text",
+  "html",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.github.fbricon</groupId>
+    <artifactId>mdream4j-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>mdream4j-reference</artifactId>
+  <name>mdream4j reference bridge</name>
+  <description>Test-only FFM bridge to the upstream Rust mdream core. Never published.</description>
+
+  <properties>
+    <maven.compiler.release>25</maven.compiler.release>
+    <maven.deploy.skip>true</maven.deploy.skip>
+    <maven.install.skip>true</maven.install.skip>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <mdream.reference.library>${project.basedir}/../tools/reference/target/release/${native.library.name}</mdream.reference.library>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>macos-native</id>
+      <activation>
+        <os><family>mac</family></os>
+      </activation>
+      <properties>
+        <native.library.name>libmdream_reference.dylib</native.library.name>
+      </properties>
+    </profile>
+    <profile>
+      <id>linux-native</id>
+      <activation>
+        <os><family>unix</family><name>Linux</name></os>
+      </activation>
+      <properties>
+        <native.library.name>libmdream_reference.so</native.library.name>
+      </properties>
+    </profile>
+    <profile>
+      <id>windows-native</id>
+      <activation>
+        <os><family>windows</family></os>
+      </activation>
+      <properties>
+        <native.library.name>mdream_reference.dll</native.library.name>
+      </properties>
+    </profile>
+  </profiles>
+</project>

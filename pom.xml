@@ -129,4 +129,13 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>with-reference</id>
+      <modules>
+        <module>mdream4j-reference</module>
+      </modules>
+    </profile>
+  </profiles>
 </project>
