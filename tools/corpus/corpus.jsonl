@@ -999,3 +999,8 @@
 {"id":"rust-templates-005","html":"<ul><li>A<ul><li>A1</li><li>A2</li></ul></li><li>B</li></ul>","options":{}}
 {"id":"rust-templates-006","html":"<img src=\"test.png\" alt=\"Test image\">","options":{}}
 {"id":"rust-templates-007","html":"<blockquote><p>Quoted text</p></blockquote>","options":{}}
+{"id":"rust-frag-001","html":"<a href=\"#a\"><blockquote>é<a href=\"#b\">x</a></blockquote></a>","options":{"clean":{"fragments":true}}}
+{"id":"rust-frag-002","html":"<a href=\"#a\"><blockquote>e<a href=\"#b\">x</a></blockquote></a>","options":{"clean":{"fragments":true}}}
+{"id":"rust-frag-003","html":"<h2 id=\"b\">b</h2><a href=\"#a\"><blockquote>e<a href=\"#b\">x</a></blockquote></a>","options":{"clean":{"fragments":true}}}
+{"id":"rust-html-parity-003","html":"<strong>a</strong> and <em>b</em>","options":{}}
+{"id":"rust-html-parity-006","html":"<span>x = 1;</span>\n","options":{}}

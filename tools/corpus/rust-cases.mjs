@@ -523,6 +523,16 @@ export function collectRustCases(upstream) {
       { name: "html_to_markdown_result", optionExpression: 1 },
     ]),
   );
+  cases.push(
+    ...collectFile(`${tests}/fragment_link_offset.rs`, "rust-frag", [
+      { name: "convert_fragments", options: () => ({ clean: { fragments: true } }) },
+    ]),
+  );
+  cases.push(
+    ...collectFile(`${tests}/streaming_html_parity.rs`, "rust-html-parity", [
+      { name: "assert_stream_matches" },
+    ]),
+  );
   return cases;
 }
 
