@@ -2790,9 +2790,98 @@ final class OutputOps {
         }
       }
     }
+    // The quote prefix shifts every recorded offset inside the content, so the
+    // fragment pass and the offset-keyed state below must be remapped too.
+    for (ConvertState.FragmentLink link : self.fragmentLinks) {
+      if (link.bracketStart >= frame.contentStart && link.linkEnd <= contentEnd) {
+        link.bracketStart =
+            frame.contentStart
+                + blockquoteOffset(
+                    content, frame.listIndent, link.bracketStart - frame.contentStart);
+        link.textEnd =
+            frame.contentStart
+                + blockquoteOffset(content, frame.listIndent, link.textEnd - frame.contentStart);
+        link.linkEnd =
+            frame.contentStart
+                + blockquoteOffset(content, frame.listIndent, link.linkEnd - frame.contentStart);
+      }
+    }
+    int quotedEnd = frame.contentStart + quoted.length();
+    for (ConvertState.CodeSpanState span : self.codeSpans) {
+      span.outputStart = blockquoteRemap(span.outputStart, frame, content, contentEnd, quotedEnd);
+      span.contentStart = blockquoteRemap(span.contentStart, frame, content, contentEnd, quotedEnd);
+    }
+    for (ConvertState.CaptionFrame frameState : self.captionFrames) {
+      if (frameState.state == ConvertState.CAPTION_TENTATIVE) {
+        frameState.tentativeOutputStart =
+            blockquoteRemap(
+                frameState.tentativeOutputStart, frame, content, contentEnd, quotedEnd);
+        frameState.tentativeContentStart =
+            blockquoteRemap(
+                frameState.tentativeContentStart, frame, content, contentEnd, quotedEnd);
+      }
+    }
+    if (self.codeFence != null) {
+      int marker = self.codeFence.outputStart + self.codeFence.markerOffset;
+      self.codeFence.outputStart =
+          blockquoteRemap(self.codeFence.outputStart, frame, content, contentEnd, quotedEnd);
+      self.codeFence.contentStart =
+          blockquoteRemap(self.codeFence.contentStart, frame, content, contentEnd, quotedEnd);
+      marker = blockquoteRemap(marker, frame, content, contentEnd, quotedEnd);
+      self.codeFence.markerOffset = marker - self.codeFence.outputStart;
+    }
+    if (self.rawHtmlScannedTo < contentEnd && self.inRawHtmlBlock()) {
+      trackRawHtmlMarkdownContext(self, contentEnd);
+    }
     truncateBuffer(self, frame.contentStart);
     self.buffer.append(quoted);
+    self.rawHtmlScannedTo =
+        self.rawHtmlScannedTo < contentEnd
+            ? quotedEnd
+            : self.rawHtmlScannedTo + quotedEnd - contentEnd;
     self.lastContentCacheLen = quoted.length();
+  }
+
+  /** Maps an offset inside a blockquote's content to the same offset after `> ` quoting. */
+  private static int blockquoteOffset(String content, String listIndent, int offset) {
+    int sourceStart = 0;
+    int outputStart = 0;
+    int index = 0;
+    while (index < content.length()) {
+      int newline = content.indexOf('\n', index);
+      int lineEnd = newline < 0 ? content.length() : newline;
+      String lineContent = content.substring(index, lineEnd);
+      int removed =
+          !listIndent.isEmpty() && lineContent.startsWith(listIndent)
+              ? listIndent.length()
+              : 0;
+      int unindentedLength = Math.max(0, lineContent.length() - removed);
+      int prefixLength = listIndent.length() + 1 + (unindentedLength > 0 ? 1 : 0);
+      int sourceLineEnd = sourceStart + lineContent.length();
+      if (offset <= sourceLineEnd) {
+        return outputStart + prefixLength + Math.max(0, offset - sourceStart - removed);
+      }
+      sourceStart += lineContent.length() + (newline < 0 ? 0 : 1);
+      outputStart += prefixLength + unindentedLength + (newline < 0 ? 0 : 1);
+      index = newline < 0 ? content.length() : newline + 1;
+    }
+    return outputStart;
+  }
+
+  private static int blockquoteRemap(
+      int offset,
+      ConvertState.BlockquoteFrame frame,
+      String content,
+      int contentEnd,
+      int quotedEnd) {
+    if (offset < frame.contentStart) {
+      return offset;
+    }
+    if (offset <= contentEnd) {
+      return frame.contentStart
+          + blockquoteOffset(content, frame.listIndent, offset - frame.contentStart);
+    }
+    return quotedEnd;
   }
 
   // === Captions ===
