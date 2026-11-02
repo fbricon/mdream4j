@@ -30,6 +30,10 @@ final class NodeStack {
     return len;
   }
 
+  boolean isEmpty() {
+    return len == 0;
+  }
+
   ElementNode get(int index) {
     return nodes[index];
   }
