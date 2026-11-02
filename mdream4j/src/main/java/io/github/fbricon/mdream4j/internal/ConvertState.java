@@ -224,6 +224,8 @@ final class ConvertState {
 
   static final int TYPICAL_NESTING_DEPTH = 32;
   static final int TEXT_RUN_FLUSH_THRESHOLD = 64 * 1024;
+  /** How much a run grows between scans for a usable word boundary. */
+  static final int TEXT_RUN_SPLIT_SCAN = 64;
 
   static final int NO_OVERRIDE = 255;
 

@@ -2032,6 +2032,9 @@ final class ParseOps {
           }
           self.lastCharWasWhitespace = false;
           self.justClosedTag = false;
+          if (flushTextRun(self, textBuffer)) {
+            return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+          }
           continue;
         }
 
@@ -2101,10 +2104,16 @@ final class ParseOps {
           }
           if (cc >= 128) {
             self.textBufferBatchableLen += textBuffer.length() - beforeLen;
+            if (flushTextRun(self, textBuffer)) {
+              return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+            }
             continue;
           }
         }
         i++;
+        if (flushTextRun(self, textBuffer)) {
+          return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+        }
         continue;
       }
 
@@ -2389,6 +2398,135 @@ final class ParseOps {
 
   private static int textRunRoom(ConvertState self, StringBuilder textBuffer) {
     return Math.max(1, self.textRunNextFlush - Scan.utf8Length(textBuffer));
+  }
+
+  /**
+   * Whether the text run being accumulated may be emitted as several text nodes. `<title>` text is
+   * assigned to the frontmatter title, a Tailwind prefix wraps every text node, and wrapping
+   * measures its column per node, so splitting any of those would change the output.
+   */
+  private static boolean textRunSplittable(ConvertState self) {
+    if (self.inPre
+        || self.inNonNesting
+        || self.wrapWidth != 0
+        || self.inRawHtmlBlock()) {
+      return false;
+    }
+    // Pieces of a run inside a quote or a heading pile up in held-back output.
+    if (!self.blockquotes.isEmpty() || self.inHeading()) {
+      return false;
+    }
+    // A link's title is dropped when it repeats the link text, decided against the last text
+    // node, so a piece boundary inside such a link would change that decision.
+    if (self.depthMap[Consts.TAG_A] > 0) {
+      for (int i = 0; i < self.stack.size(); i++) {
+        ElementNode node = self.stack.get(i);
+        if (node.tagId == Consts.TAG_A) {
+          String title = node.attributes.getBit(Consts.ATTR_TITLE);
+          if (title != null && !title.isEmpty()) {
+            return false;
+          }
+        }
+      }
+    }
+    ElementNode parent = self.stack.size() == 0 ? null : self.stack.get(self.stack.size() - 1);
+    return parent == null
+        || (parent.tagId != Consts.TAG_TITLE
+            && (!self.hasTailwind || parent.tailwind() == null));
+  }
+
+  /**
+   * Emits the accumulated run in pieces of one source text node, so an enormous run streams in a
+   * window instead of being held whole. Returns whether held output is past the node cap.
+   */
+  private static boolean flushTextRun(ConvertState self, StringBuilder textBuffer) {
+    if (textBuffer.length() >= self.textRunNextFlush) {
+      cutTextRun(self, textBuffer);
+    }
+    return self.heldOutputExceeded;
+  }
+
+  private static void cutTextRun(ConvertState self, StringBuilder textBuffer) {
+    if (!textRunSplittable(self)) {
+      self.textRunNextFlush = textBuffer.length() + ConvertState.TEXT_RUN_FLUSH_THRESHOLD;
+      return;
+    }
+    // Reach back to the last byte the previous scan saw, which it could not judge
+    // without the byte after it.
+    int floor = Math.max(0, self.textRunNextFlush - (ConvertState.TEXT_RUN_SPLIT_SCAN + 1));
+    int cut = splitPoint(textBuffer, floor, self.textBufferBatchableLen == textBuffer.length());
+    if (cut < 0) {
+      // Retry a scan window later, not at every byte of a long token.
+      self.textRunNextFlush = textBuffer.length() + ConvertState.TEXT_RUN_SPLIT_SCAN;
+      return;
+    }
+    self.textRunNextFlush = ConvertState.TEXT_RUN_FLUSH_THRESHOLD;
+    String tail = textBuffer.substring(cut);
+    processTextBufferPiece(self, textBuffer, false);
+    // A blank link's text can outgrow the cap within a single run.
+    checkHeldOutput(self);
+    self.lastNodeIsInline = true;
+    textBuffer.append(tail);
+    self.hasEncodedHtmlEntity = tail.indexOf('&') >= 0;
+    self.textBufferHasInlineGfmHazard = hasGfmHazard(tail);
+    self.textBufferBatchableLen = batchableLength(tail);
+    self.textBufferContainsNonWhitespace = true;
+    self.textBufferContainsWhitespace = tail.indexOf(' ') >= 0;
+  }
+
+  /**
+   * Offset after which a text run may be cut. A space settles entity decoding and escaper lookahead,
+   * so any content may be cut there; otherwise, if {@code hardCut}, leave the last scalar, unless it
+   * is a space, to continue the node.
+   */
+  private static int splitPoint(CharSequence text, int floor, boolean hardCut) {
+    int length = text.length();
+    int index = Math.max(0, length - 1);
+    while (index > floor) {
+      index--;
+      if (text.charAt(index) == ' ' && !isSplitStop(text.charAt(index + 1))) {
+        return index + 1;
+      }
+    }
+    // A tail of one space would be trimmed as the next piece's indentation.
+    if (length == 0) {
+      return -1;
+    }
+    int cut = length - 1;
+    if (Character.isLowSurrogate(text.charAt(cut))) {
+      cut--;
+    }
+    return hardCut && cut >= 0 && text.charAt(cut) != ' ' ? cut : -1;
+  }
+
+  private static boolean isSplitStop(char c) {
+    return c == ' '
+        || c == '#'
+        || c == '-'
+        || c == '+'
+        || c == '>'
+        || (c >= '0' && c <= '9');
+  }
+
+  private static boolean hasGfmHazard(CharSequence text) {
+    for (int i = 0; i < text.length(); i++) {
+      char c = text.charAt(i);
+      if (c < 256 && (ConvertState.GFM_BYTE_FLAGS[c] & ConvertState.GFM_HAZARD_BIT) != 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static int batchableLength(CharSequence text) {
+    int count = 0;
+    for (int i = 0; i < text.length(); i++) {
+      char c = text.charAt(i);
+      if (c >= 128 || c == ' ' || ConvertState.BATCHABLE_TEXT[c]) {
+        count++;
+      }
+    }
+    return count;
   }
 
   /** Drop the rest of the input once held output has outgrown the cap. */
