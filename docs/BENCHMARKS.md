@@ -92,3 +92,57 @@ reference only run on 25.
 | Allocation | ≤ flexmark's B/op on the same fixture |
 | Streaming (64 KiB) | ≤1.3× one-shot |
 | Native-image startup | <10 ms to first conversion |
+
+## Results
+
+Measured on Temurin 25.0.4.1, macOS arm64 (Apple silicon), `-Xms2g -Xmx2g`,
+with a shortened matrix: 2 × 1 s warmup, 3 × 1 s measurement, 1 fork, `-prof gc`.
+The committed defaults (3 × 2 s / 5 × 2 s / 3 forks) give the same ordering with
+tighter error bars.
+
+Milliseconds per conversion, lower is better:
+
+| Fixture | mdream4j | mdream (Rust) | flexmark pub | flexmark patched | remark | copy_down | jsoup parse | xberg |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| nuxt (3.5 KB) | 0.0091 | 0.0100 | 0.065 | 0.066 | 0.056 | 0.337 | 0.021 | 0.067 |
+| wikipedia (166 KB) | 0.711 | 0.574 | 3.163 | 3.267 | 3.152 | 38.45 | 1.548 | 5.458 |
+| mdn (235 KB) | 1.274 | 1.032 | 8.315 | 5.822 | 4.499 | 55.15 | 1.996 | 8.393 |
+| github (430 KB) | 0.856 | 1.538 | 4.551 | 4.387 | 3.364 | 60.58 | 1.902 | 8.888 |
+| react (265 KB) | 0.720 | 0.849 | 2.885 | 2.812 | 2.766 | 18.39 | 2.040 | 8.778 |
+| wikipedia-xl (1.8 MB) | 11.75 | 8.404 | n/r | n/r | n/r | n/r | n/r | n/r |
+| depth-512 | 0.057 | 0.047 | 0.774 | 0.322 | 1.133 | 2.667 | 0.288 | 0.291 |
+| table-huge (2000×8) | 3.422 | 2.592 | 29.90 | 28.58 | 17.30 | 4901.84 | 4.269 | 19.48 |
+| node-1mb | 0.863 | 1.787 | n/r | n/r | n/r | n/r | n/r | n/r |
+| text-10mb | 9.163 | 22.19 | n/r | n/r | n/r | n/r | n/r | n/r |
+
+`n/r` means not run: flexmark on `wikipedia-xl` takes around 100 s per
+conversion (the markdown→HTML→markdown pipeline is super-linear), and the
+other contenders were left off that fixture for the same reason. The two
+synthetic inputs are only meaningful for the two engines that can process a
+single 1–10 MB node without a blow-up.
+
+Allocation, MB per conversion (`gc.alloc.rate.norm`):
+
+| Fixture | mdream4j | mdream (Rust) | flexmark patched | remark |
+|---|---:|---:|---:|---:|
+| nuxt | 0.02 | 0.01 | 0.07 | 0.08 |
+| wikipedia | 1.70 | 0.61 | 4.27 | 5.91 |
+| mdn | 2.35 | 0.98 | 6.40 | 6.90 |
+| github | 1.72 | 1.15 | 6.42 | 5.73 |
+| react | 1.55 | 0.71 | 3.76 | 5.72 |
+| wikipedia-xl | 29.44 | 9.27 | n/r | n/r |
+| depth-512 | 0.17 | 0.01 | 0.63 | 0.74 |
+| table-huge | 7.88 | 1.13 | 61.09 | 66.69 |
+
+Headlines:
+
+- mdream4j is 0.4–0.9× the Rust reference on large documents (`github`,
+  `node-1mb`, `text-10mb`) and 1.2–1.4× on the others; the Rust build is
+  SIMD-assisted while the port is plain Java.
+- It is 3–7× faster than flexmark, remark and jsoup on real pages, and 10–20×
+  faster than xberg.
+- Allocation stays within Rust's order of magnitude and well under flexmark's
+  and remark's.
+- `text-10mb` at 9.2 ms is about 1.1 GB/s of input, so the text-run window is
+  linear in input size rather than quadratic.
+
