@@ -146,3 +146,12 @@ Headlines:
 - `text-10mb` at 9.2 ms is about 1.1 GB/s of input, so the text-run window is
   linear in input size rather than quadratic.
 
+## Native image
+
+`tools/native-smoke/run.sh` builds a `--no-fallback` image with GraalVM CE and diffs its output
+against the JVM's for three generated documents (a kitchen-sink page, a ~1 MB article and a
+512-deep nest), converting the large and deep ones both one-shot and streamed. On GraalVM CE
+25.0.2 (macOS arm64) the image builds with no configuration and reaches its first conversion in
+**0.9 ms**, against 22 ms on the JVM where class loading dominates; the <10 ms target holds with
+room to spare.
+
