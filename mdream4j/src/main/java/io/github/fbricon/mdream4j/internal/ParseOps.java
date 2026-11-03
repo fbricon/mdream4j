@@ -857,21 +857,15 @@ final class ParseOps {
       hSpacing = null;
     }
 
-    if (self.hasTagOverrides && tagId >= 0) {
-      TagOverride override = self.overrideForId(tagId);
-      if (override != null && override.inline() != null) {
-        hInline = override.inline();
-      }
-      if (override != null
-          && (override.selfClosing() != null
-              || override.collapseInnerWhiteSpace() != null
-              || override.spacingBefore() != 0
-              || override.spacingAfter() != 0)) {
-        // The immutable handler flags stay shared; the node picks up the
-        // override values below.
-      }
-    } else if (self.hasTagOverrides && tagId < 0) {
-      TagOverride override = self.overrideForName(tagName, -1);
+    if (self.hasTagOverrides) {
+      // Rust keys built-in tags by their canonical name and custom or aliased
+      // elements by the name in the source document (parse.rs:1237-1252).
+      TagOverride override =
+          isBuiltin && tagId >= 0
+              ? self.overrideForId(tagId)
+              : self.overrideForName(tagName, -1);
+      // Only `is_inline` is applied at parse time; spacing and whitespace
+      // collapsing are resolved when the node is rendered.
       if (override != null && override.inline() != null) {
         hInline = override.inline();
       }
@@ -904,26 +898,6 @@ final class ParseOps {
     tag.isNonNesting = hNonNesting;
     tag.collapsesInnerWhiteSpace = hCollapses;
     tag.spacing = hSpacing;
-
-    if (self.hasTagOverrides) {
-      TagOverride override =
-          tagId >= 0 ? self.overrideForId(tagId) : self.overrideForName(tagName, -1);
-      if (override != null) {
-        if (override.inline() != null) {
-          tag.isInline = override.inline();
-        }
-        if (override.selfClosing() != null) {
-          tag.isNonNesting = tag.isNonNesting;
-        }
-        if (override.collapseInnerWhiteSpace() != null) {
-          tag.collapsesInnerWhiteSpace = override.collapseInnerWhiteSpace();
-        }
-        if (override.spacingBefore() != 0 || override.spacingAfter() != 0) {
-          tag.spacing =
-              new int[] {override.spacingBefore() & 0xFF, override.spacingAfter() & 0xFF};
-        }
-      }
-    }
 
     boolean skipNode = false;
     boolean filterExcluded = false;
@@ -1342,7 +1316,7 @@ final class ParseOps {
               new io.github.fbricon.mdream4j.ExtractedElement(
                   tracked.selector,
                   tracked.tagName,
-                  tracked.textContent.toString().trim(),
+                  Chars.trimUnicode(tracked.textContent),
                   attrs));
         }
         tail.clear();

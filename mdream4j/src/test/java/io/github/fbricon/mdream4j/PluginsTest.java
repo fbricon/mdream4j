@@ -108,6 +108,14 @@ class PluginsTest {
   }
 
   @Test
+  void spacingZeroIsDistinguishableFromUnset() {
+    TagOverride unset = TagOverride.builder().build();
+    TagOverride zero = TagOverride.builder().spacing(0, 0).build();
+    assertFalse(unset.hasSpacing());
+    assertTrue(zero.hasSpacing());
+  }
+
+  @Test
   void rejectsInvalidSpacing() {
     assertThrows(IllegalArgumentException.class, () -> TagOverride.builder().spacing(-1, 0));
     assertThrows(IllegalArgumentException.class, () -> TagOverride.builder().spacing(0, 256));

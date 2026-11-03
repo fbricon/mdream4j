@@ -39,7 +39,7 @@ final class Selector {
 
   /** Parses a comma-separated selector list while preserving attribute values. */
   static ParsedSelector parseSelectorList(String selector) {
-    String trimmed = Chars.trimAscii(selector);
+    String trimmed = Chars.trimUnicode(selector);
     if (trimmed.isEmpty()) {
       return parseSelector(trimmed);
     }
@@ -58,7 +58,7 @@ final class Selector {
         }
         index = end;
       } else if (c == ',') {
-        String part = Chars.trimAscii(trimmed.substring(start, index));
+        String part = Chars.trimUnicode(trimmed.substring(start, index));
         if (part.isEmpty()) {
           return ParsedSelector.tag(trimmed);
         }
@@ -72,7 +72,7 @@ final class Selector {
       return parseSelector(trimmed);
     }
 
-    String last = Chars.trimAscii(trimmed.substring(start));
+    String last = Chars.trimUnicode(trimmed.substring(start));
     if (last.isEmpty()) {
       return ParsedSelector.tag(trimmed);
     }
@@ -81,7 +81,7 @@ final class Selector {
   }
 
   static ParsedSelector parseSelector(String selector) {
-    String trimmed = Chars.trimAscii(selector);
+    String trimmed = Chars.trimUnicode(selector);
     if (trimmed.isEmpty()) {
       return ParsedSelector.tag("");
     }

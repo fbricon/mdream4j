@@ -20,6 +20,7 @@ public final class TagOverride {
   private final String exit;
   private final int spacingBefore;
   private final int spacingAfter;
+  private final boolean spacingSet;
   private final Boolean inline;
   private final Boolean selfClosing;
   private final Boolean collapseInnerWhiteSpace;
@@ -30,6 +31,7 @@ public final class TagOverride {
     this.exit = builder.exit;
     this.spacingBefore = builder.spacingBefore;
     this.spacingAfter = builder.spacingAfter;
+    this.spacingSet = builder.spacingSet;
     this.inline = builder.inline;
     this.selfClosing = builder.selfClosing;
     this.collapseInnerWhiteSpace = builder.collapseInnerWhiteSpace;
@@ -80,6 +82,16 @@ public final class TagOverride {
     return spacingAfter;
   }
 
+  /**
+   * Whether {@link Builder#spacing(int, int)} was called.
+   *
+   * <p>Distinguishes an explicit {@code spacing(0, 0)} from the default, where spacing
+   * falls back to the tag's built-in value.
+   */
+  public boolean hasSpacing() {
+    return spacingSet;
+  }
+
   /** Whether the tag is inline, or {@code null} for the built-in default. */
   public Boolean inline() {
     return inline;
@@ -111,6 +123,7 @@ public final class TagOverride {
     TagOverride other = (TagOverride) o;
     return spacingBefore == other.spacingBefore
         && spacingAfter == other.spacingAfter
+        && spacingSet == other.spacingSet
         && Objects.equals(enter, other.enter)
         && Objects.equals(exit, other.exit)
         && Objects.equals(inline, other.inline)
@@ -122,8 +135,8 @@ public final class TagOverride {
   @Override
   public int hashCode() {
     return Objects.hash(
-        enter, exit, spacingBefore, spacingAfter, inline, selfClosing, collapseInnerWhiteSpace,
-        alias);
+        enter, exit, spacingBefore, spacingAfter, spacingSet, inline, selfClosing,
+        collapseInnerWhiteSpace, alias);
   }
 
   @Override
@@ -142,6 +155,7 @@ public final class TagOverride {
     private String exit;
     private int spacingBefore;
     private int spacingAfter;
+    private boolean spacingSet;
     private Boolean inline;
     private Boolean selfClosing;
     private Boolean collapseInnerWhiteSpace;
@@ -168,6 +182,7 @@ public final class TagOverride {
       }
       this.spacingBefore = before;
       this.spacingAfter = after;
+      this.spacingSet = true;
       return this;
     }
 

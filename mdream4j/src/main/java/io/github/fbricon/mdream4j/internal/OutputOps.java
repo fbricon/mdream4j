@@ -1243,22 +1243,49 @@ final class OutputOps {
         && liDepth > 0
         && (text.indexOf('\n') >= 0 || lastChar == '\n')) {
       String indent = self.listIndent.toString();
+      int indentBytes = Scan.utf8Length(indent);
+      // The fence holds what is written, indentation included, so that is what
+      // its cap measures. A deep list's indent multiplies each line, and the
+      // check above saw only the raw text: stop building once past the cap.
+      long budget = Long.MAX_VALUE;
+      if (self.codeFence != null && self.maxNodeBytes != 0) {
+        long used = Math.max(0L, (long) self.buffer.length() - self.codeFence.contentStart);
+        budget = Math.max(0L, self.maxNodeBytes - used);
+      }
       StringBuilder out = new StringBuilder(text.length() + indent.length() * 2);
+      long outBytes = 0;
       if (lastChar == '\n' && !text.isEmpty() && text.charAt(0) != '\n') {
         out.append(indent);
+        outBytes += indentBytes;
       }
       int prev = 0;
       for (int i = 0; i < text.length(); i++) {
         if (text.charAt(i) == '\n') {
           out.append(text, prev, i + 1);
+          outBytes += Scan.utf8Length(text, prev, i + 1);
           int next = i + 1;
           if (next < text.length() && text.charAt(next) != '\n') {
             out.append(indent);
+            outBytes += indentBytes;
           }
           prev = next;
+          if (outBytes > budget) {
+            break;
+          }
         }
       }
-      out.append(text, prev, text.length());
+      if (outBytes <= budget) {
+        out.append(text, prev, text.length());
+        outBytes += Scan.utf8Length(text, prev, text.length());
+      }
+      if (outBytes > budget) {
+        self.truncated = true;
+        int kept = clampToCharBoundary(out.toString(), (int) budget);
+        if (kept == 0) {
+          return;
+        }
+        out.setLength(kept);
+      }
       text = out.toString();
     }
 
@@ -3616,6 +3643,7 @@ final class OutputOps {
     }
 
     int tagId = node.tagId;
+    TagOverride override = self.hasTagOverrides ? self.overrideForNode(node) : null;
     if (!self.plainText
         && tagId == Consts.TAG_PRE
         && self.preFenceOwnerDepth == 0
@@ -3634,8 +3662,14 @@ final class OutputOps {
       self.tableColumnAlignments.clear();
     } else if (tagId == Consts.TAG_TR) {
       self.tableCurrentRowCells = 0;
+      // An override with neither enter nor exit renders the row like the
+      // built-in handler and keeps the empty-row deferral; an explicit-output
+      // override takes over the row's own edges.
       if (self.depthMap[Consts.TAG_TABLE] <= 1 && !self.inTableCell()) {
-        self.tableRowOpenerPending = !self.plainText && !self.tableRenderedTable;
+        self.tableRowOpenerPending =
+            !self.plainText
+                && !self.tableRenderedTable
+                && (override == null || (override.enter() == null && override.exit() == null));
       }
     } else if (tagId == Consts.TAG_TH) {
       String alignValue = node.attributes.getBit(Consts.ATTR_ALIGN);
@@ -3657,7 +3691,6 @@ final class OutputOps {
       }
     }
 
-    TagOverride override = self.hasTagOverrides ? self.overrideForNode(node) : null;
     boolean enterIsLiteral = false;
     String output;
     if (override != null && override.enter() != null) {
@@ -3724,15 +3757,11 @@ final class OutputOps {
       }
     }
 
-    int[] nodeSpacing = override != null ? spacingOverride(override) : null;
-    if (nodeSpacing == null) {
-      nodeSpacing = node.spacing;
-    }
+    int[] overrideSpacing = override != null ? spacingOverride(override) : null;
+    int[] nodeSpacing = overrideSpacing != null ? overrideSpacing : node.spacing;
     int[] captionSpacing =
         tagId == Consts.TAG_FIGCAPTION
-            ? (override != null && spacingOverride(override) != null
-                ? spacingOverride(override)
-                : Consts.DEFAULT_BLOCK_SPACING)
+            ? (overrideSpacing != null ? overrideSpacing : Consts.DEFAULT_BLOCK_SPACING)
             : Consts.NO_SPACING;
     int[] config = calculateNewLineConfig(self, tagId, nodeSpacing, true);
 
@@ -3775,6 +3804,21 @@ final class OutputOps {
     }
     int configuredNewLines =
         quoteAtStart(self) || consumesCaptionBoundary || captionEnter ? 0 : config[0];
+
+    // emptyLinks: skip hrefs that cannot represent meaningful navigation.
+    if (tagId == Consts.TAG_A
+        && (self.cleanFlags & ConvertState.CLEAN_EMPTY_LINKS) != 0) {
+      String href = node.attributes.getBit(Consts.ATTR_HREF);
+      if (href != null && Url.isEmptyLinkHref(href)) {
+        beginLink(self, self.buffer.length(), true, false);
+        resetEmptyTentativeCaptionFrames(self);
+        if (self.streaming) {
+          self.link.holdReleased = true;
+        }
+        self.lastNodeIsInline = node.isInline;
+        return;
+      }
+    }
 
     if (!self.plainText && ConvertState.isRawHtmlBlockTag(tagId)) {
       enterRawHtmlBoundary(self, enterIsLiteral, output != null, configuredNewLines);
@@ -3951,8 +3995,18 @@ final class OutputOps {
       return;
     }
 
-    settleEmptyTextPending(self, outputStart, inlineMarkerType(tagId) != 0);
-    recordEnterMarker(self, tagId, output, outputStart, false);
+    settleEmptyTextPending(
+        self,
+        outputStart,
+        tagId == Consts.TAG_A
+            || tagId == Consts.TAG_CODE
+            || inlineMarkerType(tagId) != 0);
+    boolean codeSpanMarker = self.depthMap[Consts.TAG_PRE] == 0 && !self.inRawHtmlBlock();
+    int markerTag =
+        !enterIsLiteral && (tagId != Consts.TAG_CODE || codeSpanMarker) ? tagId : -1;
+    boolean keepsMarkers =
+        tagId == Consts.TAG_A && (self.cleanFlags & ConvertState.CLEAN_EMPTY_LINK_TEXT) != 0;
+    recordEnterMarker(self, markerTag, output, outputStart, keepsMarkers);
     if (!node.isInline && !self.openMarkers.isEmpty()) {
       self.openMarkers.clear();
     }
@@ -3983,7 +4037,7 @@ final class OutputOps {
   }
 
   private static int[] spacingOverride(TagOverride override) {
-    if (override.spacingBefore() == 0 && override.spacingAfter() == 0) {
+    if (!override.hasSpacing()) {
       return null;
     }
     return new int[] {override.spacingBefore() & 0xFF, override.spacingAfter() & 0xFF};
