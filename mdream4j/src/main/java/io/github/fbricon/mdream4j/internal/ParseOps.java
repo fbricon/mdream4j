@@ -348,6 +348,7 @@ final class ParseOps {
       }
       if (start > 0) {
         textBuffer.delete(0, start);
+        resetTextBufferBytes(self, textBuffer);
       }
     }
 
@@ -356,6 +357,7 @@ final class ParseOps {
       boolean protect = !self.rawHtmlBlockOpen;
       if (Entities.decodeInto(textBuffer, false, protect, self.entityBuffer)) {
         swap(textBuffer, self.entityBuffer);
+        resetTextBufferBytes(self, textBuffer);
       }
       self.hasEncodedHtmlEntity = false;
     }
@@ -371,7 +373,7 @@ final class ParseOps {
       OutputOps.emitPlainTextInline(self, text, containsWhitespace, depth, index);
     }
 
-    textBuffer.setLength(0);
+    clearTextBuffer(self, textBuffer);
 
     advanceTextNodeCounters(self, firstBlockParentIndex);
   }
@@ -413,7 +415,7 @@ final class ParseOps {
     int childTextNodeIndex = parent != null ? parent.childTextNodeIndex : 0;
 
     if (!inPreTag && !containsNonWhitespace && childTextNodeIndex == 0 && self.stack.size() != 0) {
-      textBuffer.setLength(0);
+      clearTextBuffer(self, textBuffer);
       return;
     }
     if (textBuffer.length() == 0) {
@@ -457,6 +459,7 @@ final class ParseOps {
           }
         }
         textBuffer.delete(0, start);
+        resetTextBufferBytes(self, textBuffer);
       }
     }
 
@@ -469,6 +472,7 @@ final class ParseOps {
               && !self.inRawHtmlBlock();
       if (Entities.decodeInto(textBuffer, false, protect, self.entityBuffer)) {
         swap(textBuffer, self.entityBuffer);
+        resetTextBufferBytes(self, textBuffer);
       }
       self.hasEncodedHtmlEntity = false;
     }
@@ -519,7 +523,7 @@ final class ParseOps {
       }
     }
 
-    textBuffer.setLength(0);
+    clearTextBuffer(self, textBuffer);
 
     if (completesTextNode) {
       advanceTextNodeCounters(self, firstBlockParentIndex);
@@ -1961,7 +1965,7 @@ final class ParseOps {
 
       if (maxNodeBytes != 0
           && cc != '<'
-          && (self.textNodeExhausted || Scan.utf8Length(textBuffer) >= maxNodeBytes)) {
+          && (self.textNodeExhausted || textBufferBytes(self, textBuffer) >= maxNodeBytes)) {
         int next = chunk.indexOf('<', i);
         i = next < 0 ? chunkLength : next;
         self.textNodeExhausted = true;
@@ -2391,8 +2395,53 @@ final class ParseOps {
     return consumed;
   }
 
+  /**
+   * UTF-8 byte length of {@link ConvertState#parseTextBuffer}, cached across calls.
+   *
+   * <p>Long runs are measured every time the scanner asks for room. Rescanning the whole buffer
+   * there was quadratic once a run could not be split (non-batchable text such as {@code &}, and
+   * the non-splittable contexts guarded by {@link #textRunSplittable}). The cache covers a prefix
+   * that has not been rewritten: appends extend it, while every delete, entity decode and
+   * truncation clears it. A trailing high surrogate stays out of the cached prefix, so a pair
+   * split across two appends is remeasured as four bytes instead of being counted twice.
+   */
+  private static long textBufferBytes(ConvertState self, StringBuilder textBuffer) {
+    int length = textBuffer.length();
+    if (length < self.textBufferMeasuredLength) {
+      self.textBufferMeasuredLength = 0;
+      self.textBufferMeasuredBytes = 0;
+    }
+    int end = length;
+    if (end > self.textBufferMeasuredLength
+        && Character.isHighSurrogate(textBuffer.charAt(end - 1))) {
+      end--;
+    }
+    if (end > self.textBufferMeasuredLength) {
+      self.textBufferMeasuredBytes +=
+          Scan.utf8Length(textBuffer, self.textBufferMeasuredLength, end);
+      self.textBufferMeasuredLength = end;
+    }
+    // A high surrogate waiting for its low half is counted the way the old full-buffer scan
+    // counted it (three bytes); the pair is remeasured as four once the low half arrives.
+    return end < length ? self.textBufferMeasuredBytes + 3 : self.textBufferMeasuredBytes;
+  }
+
+  /** Invalidates {@link #textBufferBytes} after the buffer's prefix was rewritten. */
+  private static void resetTextBufferBytes(ConvertState self, StringBuilder textBuffer) {
+    if (textBuffer == self.parseTextBuffer) {
+      self.textBufferMeasuredLength = 0;
+      self.textBufferMeasuredBytes = 0;
+    }
+  }
+
+  /** Empties a text buffer and drops its cached byte length. */
+  private static void clearTextBuffer(ConvertState self, StringBuilder textBuffer) {
+    textBuffer.setLength(0);
+    resetTextBufferBytes(self, textBuffer);
+  }
+
   private static int textRunRoom(ConvertState self, StringBuilder textBuffer) {
-    return Math.max(1, self.textRunNextFlush - Scan.utf8Length(textBuffer));
+    return (int) Math.max(1L, self.textRunNextFlush - textBufferBytes(self, textBuffer));
   }
 
   /**
@@ -2460,6 +2509,7 @@ final class ParseOps {
     // whole buffer in place would emit the tail twice.
     String tail = textBuffer.substring(cut);
     textBuffer.setLength(cut);
+    resetTextBufferBytes(self, textBuffer);
     processTextBufferPiece(self, textBuffer, false);
     // A blank link's text can outgrow the cap within a single run.
     checkHeldOutput(self);
@@ -2530,7 +2580,7 @@ final class ParseOps {
   /** Drop the rest of the input once held output has outgrown the cap. */
   private static int dropAfterHeldOutputExceeded(
       ConvertState self, StringBuilder textBuffer, int chunkLength) {
-    textBuffer.setLength(0);
+    clearTextBuffer(self, textBuffer);
     self.pendingStart = null;
     self.pendingTag = null;
     self.discard = ConvertState.Discard.none();
@@ -2758,7 +2808,7 @@ final class ParseOps {
     boolean exhausted = self.textNodeExhausted;
     if (textBuffer.length() > 0) {
       processTextBuffer(self, textBuffer);
-      textBuffer.setLength(0);
+      clearTextBuffer(self, textBuffer);
     } else if (exhausted) {
       self.textBufferContainsWhitespace = false;
       self.textBufferContainsNonWhitespace = false;
@@ -3085,8 +3135,11 @@ final class ParseOps {
     if (self.textNodeExhausted) {
       return true;
     }
-    int used = Scan.utf8Length(buffer);
-    int room = Math.max(0, cap - used);
+    long usedBytes =
+        buffer == self.parseTextBuffer
+            ? textBufferBytes(self, buffer)
+            : Scan.utf8Length(buffer);
+    int room = (int) Math.max(0L, cap - usedBytes);
     int end = 0;
     int bytes = 0;
     while (end < text.length()) {

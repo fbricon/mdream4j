@@ -61,6 +61,10 @@ final class ConvertState {
   int textBufferBatchableLen;
   int textRunNextFlush = TEXT_RUN_FLUSH_THRESHOLD;
   boolean textBufferHasInlineGfmHazard;
+  /** Length of {@link #parseTextBuffer} already covered by {@link #textBufferMeasuredBytes}. */
+  int textBufferMeasuredLength;
+  /** Cached UTF-8 byte length of {@link #parseTextBuffer}'s measured prefix. */
+  long textBufferMeasuredBytes;
   boolean justClosedTag;
   boolean isFirstTextInElement;
   boolean inNonNesting;
