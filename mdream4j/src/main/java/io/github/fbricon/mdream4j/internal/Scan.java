@@ -554,7 +554,7 @@ final class Scan {
       AttrBudget budget,
       String raw,
       String value) {
-    int bit = Consts.attr_bit(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    int bit = Consts.attr_bit(raw);
     if (mask != Consts.ATTR_ALL && (mask & bit) == 0) {
       return;
     }
@@ -770,7 +770,7 @@ final class Scan {
     boolean wanted(int mask) {
       return !dropped
           && (mask == Consts.ATTR_ALL
-              || (mask & Consts.attr_bit(name.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+              || (mask & Consts.attr_bit(name))
                   != 0);
     }
 
@@ -802,7 +802,7 @@ final class Scan {
       if (dropped || name.length() == 0) {
         return;
       }
-      int bit = Consts.attr_bit(name.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      int bit = Consts.attr_bit(name);
       if (bit != Consts.ATTR_NONE && out.containsBit(bit)) {
         dropped = true;
         name.setLength(0);

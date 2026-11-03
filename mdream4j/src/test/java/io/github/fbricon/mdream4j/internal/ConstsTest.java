@@ -134,6 +134,20 @@ class ConstsTest {
   }
 
   @Test
+  void attrBitMatchesTheByteTableForCharSequences() {
+    for (int i = 0; i < ATTR_BITS.length; i++) {
+      int bit = ATTR_BITS[i];
+      String name = ATTR_NAMES[i];
+      assertEquals(bit, Consts.attr_bit(name), "attr_bit(" + name + ")");
+      assertEquals(bit, Consts.attr_bit(new StringBuilder(upper(name))), "uppercase " + name);
+    }
+    assertEquals(Consts.ATTR_NONE, Consts.attr_bit(""));
+    assertEquals(Consts.ATTR_NONE, Consts.attr_bit("data-foo"));
+    assertEquals(Consts.ATTR_NONE, Consts.attr_bit("hrefs"));
+    assertEquals(Consts.ATTR_NONE, Consts.attr_bit("\u00e1lt"));
+  }
+
+  @Test
   void attrNameFallsBackToEmptyString() {
     assertEquals("", Consts.attr_name(Consts.ATTR_NONE));
     assertEquals("", Consts.attr_name(Consts.ATTR_ALL));

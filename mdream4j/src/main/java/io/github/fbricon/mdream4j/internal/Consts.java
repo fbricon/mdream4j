@@ -428,6 +428,78 @@ public final class Consts {
     }
   }
 
+  /**
+   * {@link #attr_bit(byte[])} without materialising the name's UTF-8 bytes, for callers that
+   * already hold a {@code String} or {@code StringBuilder}. Known attribute names are ASCII, so
+   * comparing UTF-16 chars is equivalent.
+   */
+  public static int attr_bit(CharSequence name) {
+    switch (name.length()) {
+      case 3:
+        if (eqIgnoreAsciiCase(name, "alt")) {
+          return ATTR_ALT;
+        } else if (eqIgnoreAsciiCase(name, "src")) {
+          return ATTR_SRC;
+        } else {
+          return ATTR_NONE;
+        }
+      case 4:
+        if (eqIgnoreAsciiCase(name, "href")) {
+          return ATTR_HREF;
+        } else if (eqIgnoreAsciiCase(name, "name")) {
+          return ATTR_NAME;
+        } else {
+          return ATTR_NONE;
+        }
+      case 5:
+        if (eqIgnoreAsciiCase(name, "title")) {
+          return ATTR_TITLE;
+        } else if (eqIgnoreAsciiCase(name, "class")) {
+          return ATTR_CLASS;
+        } else if (eqIgnoreAsciiCase(name, "align")) {
+          return ATTR_ALIGN;
+        } else if (eqIgnoreAsciiCase(name, "start")) {
+          return ATTR_START;
+        } else {
+          return ATTR_NONE;
+        }
+      case 7:
+        if (eqIgnoreAsciiCase(name, "content")) {
+          return ATTR_CONTENT;
+        } else if (eqIgnoreAsciiCase(name, "colspan")) {
+          return ATTR_COLSPAN;
+        } else {
+          return ATTR_NONE;
+        }
+      case 8:
+        if (eqIgnoreAsciiCase(name, "property")) {
+          return ATTR_PROPERTY;
+        } else {
+          return ATTR_NONE;
+        }
+      case 9:
+        if (eqIgnoreAsciiCase(name, "data-lang")) {
+          return ATTR_DATA_LANG;
+        } else {
+          return ATTR_NONE;
+        }
+      case 10:
+        if (eqIgnoreAsciiCase(name, "aria-label")) {
+          return ATTR_ARIA_LABEL;
+        } else {
+          return ATTR_NONE;
+        }
+      case 13:
+        if (eqIgnoreAsciiCase(name, "data-language")) {
+          return ATTR_DATA_LANGUAGE;
+        } else {
+          return ATTR_NONE;
+        }
+      default:
+        return ATTR_NONE;
+    }
+  }
+
   public static final String MARKDOWN_STRONG = "**";
   public static final String MARKDOWN_EMPHASIS = "*";
   public static final String MARKDOWN_STRIKETHROUGH = "~~";
@@ -790,6 +862,22 @@ public final class Consts {
   }
 
   /** Rust's {@code u8::eq_ignore_ascii_case}: only {@code A-Z} fold, every other byte is exact. */
+  private static boolean eqIgnoreAsciiCase(CharSequence name, String literal) {
+    if (name.length() != literal.length()) {
+      return false;
+    }
+    for (int i = 0; i < name.length(); i++) {
+      char c = name.charAt(i);
+      if (c >= 'A' && c <= 'Z') {
+        c += 'a' - 'A';
+      }
+      if (c != literal.charAt(i)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private static boolean eqIgnoreAsciiCase(byte[] name, String literal) {
     if (name.length != literal.length()) {
       return false;

@@ -61,7 +61,7 @@ final class Attributes implements Iterable<Attr> {
    * and for selector matching against arbitrary attributes.
    */
   String get(String key) {
-    int bit = Consts.attr_bit(bytes(key));
+    int bit = Consts.attr_bit(key);
     if (bit != Consts.ATTR_NONE) {
       return getBit(bit);
     }
@@ -189,10 +189,6 @@ final class Attributes implements Iterable<Attr> {
     StringBuilder buffer = new StringBuilder(value.length());
     Entities.decodeAttributeEntitiesInto(value, buffer);
     return buffer.toString();
-  }
-
-  private static byte[] bytes(String value) {
-    return value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
   }
 
   /** Rust's {@code eq_ignore_ascii_case}: fold only {@code A-Z}. */

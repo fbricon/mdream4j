@@ -203,6 +203,34 @@ public final class Url {
     return false;
   }
 
+  /** Prefix check against {@code url[start, end)} without allocating a substring. */
+  private static boolean isTrackingParam(String url, int start, int end) {
+    for (String prefix : TRACKING_PREFIXES) {
+      int len = prefix.length();
+      if (end - start < len) {
+        continue;
+      }
+      int i = 0;
+      while (i < len && url.charAt(start + i) == prefix.charAt(i)) {
+        i++;
+      }
+      if (i == len) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** {@code String.indexOf(char)} bounded to {@code [from, to)}. */
+  private static int indexOf(String value, char needle, int from, int to) {
+    for (int i = from; i < to; i++) {
+      if (value.charAt(i) == needle) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
   /**
    * Strip tracking query parameters from a URL string.
    *
@@ -225,11 +253,11 @@ public final class Url {
     // Fast check: does any param match a tracking prefix?
     int scan = queryStart;
     while (true) {
-      int amp = url.indexOf('&', scan);
-      int end = (amp < 0 || amp >= queryEnd) ? queryEnd : amp;
-      int eq = url.indexOf('=', scan);
-      int keyEnd = (eq < 0 || eq >= end) ? end : eq;
-      if (isTrackingParam(url.substring(scan, keyEnd))) {
+      int amp = indexOf(url, '&', scan, queryEnd);
+      int end = amp < 0 ? queryEnd : amp;
+      int eq = indexOf(url, '=', scan, end);
+      int keyEnd = eq < 0 ? end : eq;
+      if (isTrackingParam(url, scan, keyEnd)) {
         return stripTrackingParamsOwned(url);
       }
       if (end == queryEnd) {
