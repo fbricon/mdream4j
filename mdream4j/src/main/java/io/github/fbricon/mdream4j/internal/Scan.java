@@ -745,6 +745,15 @@ final class Scan {
     boolean slash;
     StringBuilder name = new StringBuilder();
     StringBuilder value = new StringBuilder();
+    /**
+     * UTF-8 lengths of {@link #name} and {@link #value}, kept incrementally.
+     *
+     * <p>Rust's {@code String::len()} is O(1), but the Java port stores UTF-16 and has to count
+     * bytes. Re-measuring the whole in-flight value on every chunk made a tag whose quoted value
+     * spans chunks quadratic; these counters keep the same check in O(1) per appended run.
+     */
+    int nameBytes;
+    int valueBytes;
     boolean dropped;
     final AttrBudget budget;
 
@@ -777,6 +786,8 @@ final class Scan {
     void start() {
       name.setLength(0);
       value.setLength(0);
+      nameBytes = 0;
+      valueBytes = 0;
       dropped = false;
     }
 
@@ -784,7 +795,7 @@ final class Scan {
       if (mask == Consts.ATTR_NONE || dropped || text.isEmpty()) {
         return;
       }
-      int len = utf8Length(name) + utf8Length(text);
+      int len = nameBytes + utf8Length(text);
       boolean rejected =
           mask == Consts.ATTR_ALL
               ? !budget.fits(len)
@@ -792,9 +803,11 @@ final class Scan {
       if (rejected) {
         dropped = true;
         name.setLength(0);
+        nameBytes = 0;
         return;
       }
       name.append(text);
+      nameBytes = len;
     }
 
     /** Called once the in-flight name is complete. */
@@ -806,6 +819,7 @@ final class Scan {
       if (bit != Consts.ATTR_NONE && out.containsBit(bit)) {
         dropped = true;
         name.setLength(0);
+        nameBytes = 0;
       }
     }
 
@@ -813,13 +827,17 @@ final class Scan {
       if (text.isEmpty() || !wanted(mask)) {
         return;
       }
-      if (!budget.fits(utf8Length(name) + utf8Length(value) + utf8Length(text))) {
+      int len = valueBytes + utf8Length(text);
+      if (!budget.fits(nameBytes + len)) {
         dropped = true;
         name.setLength(0);
         value.setLength(0);
+        nameBytes = 0;
+        valueBytes = 0;
         return;
       }
       value.append(text);
+      valueBytes = len;
     }
 
     void emit(int mask, Attributes out, boolean withValue) {

@@ -95,6 +95,20 @@ final class ConvertState {
 
   PendingStartTag pendingStart;
   Scan.PendingTagScan pendingTag;
+  /** Reused result of applying a start tag, so the hot path allocates nothing. */
+  final ParseOps.StartTagOutcome startTagOutcome = new ParseOps.StartTagOutcome();
+  /**
+   * Start tag whose name ran past a chunk boundary. The name bytes seen so far are consumed into
+   * this buffer, so the stream never carries (and re-reads) the growing raw prefix.
+   */
+  StringBuilder pendingTagName;
+  /** Tokenizer state of the dropped-tag scan, seeded from the {@code <} of the pending name. */
+  Scan.PendingTagScan pendingTagNameScan;
+  /**
+   * End tag whose name ran past a chunk boundary: the name bytes seen so far. The tokenizer state
+   * after the name is kept by the discard that starts as soon as the name ends.
+   */
+  StringBuilder pendingCloseTagName;
   boolean baseHrefSeen;
 
   Discard discard = Discard.none();

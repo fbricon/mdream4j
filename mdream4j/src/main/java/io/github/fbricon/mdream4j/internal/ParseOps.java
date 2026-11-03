@@ -231,6 +231,28 @@ final class ParseOps {
     }
   }
 
+  /**
+   * What the scanner loop should do after a start tag with a complete name was applied.
+   *
+   * <p>One instance is reused per conversion: a start tag is the hottest token in the scanner, so
+   * the result must not allocate.
+   */
+  static final class StartTagOutcome {
+    static final int CONTINUE = 0;
+    static final int CARRY = 1;
+    static final int PARKED = 2;
+    static final int HELD_OUTPUT = 3;
+
+    int kind;
+    int newPosition;
+
+    StartTagOutcome set(int kind, int newPosition) {
+      this.kind = kind;
+      this.newPosition = newPosition;
+      return this;
+    }
+  }
+
   // === Hidden element detection ===
 
   static boolean isHidden(ElementNode node) {
@@ -1883,6 +1905,172 @@ final class ParseOps {
 
   // === Main scanner ===
 
+  /**
+   * Applies a start tag whose name is fully known, then reports what the scanner loop should do.
+   *
+   * <p>{@code attrsStart} is the index just past the name in {@code chunk}. The name may have been
+   * assembled across chunks; only the attribute region has to be in {@code chunk}.
+   */
+  private static StartTagOutcome applyStartTag(
+      ConvertState self,
+      StringBuilder textBuffer,
+      String tagNameRaw,
+      String chunk,
+      int attrsStart) {
+    StartTagOutcome outcome = self.startTagOutcome;
+    Integer builtinBoxed = Consts.get_tag_id_ci_bytes(utf8(tagNameRaw));
+    int builtin = builtinBoxed == null ? -1 : builtinBoxed;
+    String tagName;
+    if (builtin >= 0) {
+      tagName = tagNameRaw;
+    } else if (hasAsciiUpper(tagNameRaw)) {
+      tagName = Chars.asciiLower(tagNameRaw);
+    } else {
+      tagName = tagNameRaw;
+    }
+    String name = tagName;
+    int tagId = builtin;
+    boolean isBuiltin = builtin >= 0;
+    if (self.hasTagOverrides) {
+      int alias = self.aliasTagId(name, builtin);
+      if (alias >= 0) {
+        if (builtin >= 0) {
+          name = Consts.TAG_NAMES[builtin];
+        }
+        tagId = alias;
+        isBuiltin = false;
+      }
+    }
+
+    completeTextNode(self, textBuffer);
+    if (self.heldOutputExceeded) {
+      return outcome.set(StartTagOutcome.HELD_OUTPUT, -1);
+    }
+
+    OpeningTagResult result = processOpeningTag(self, name, tagId, isBuiltin, chunk, attrsStart);
+    if (result.skip) {
+      return outcome.set(StartTagOutcome.CONTINUE, result.newPosition);
+    }
+    if (!result.complete) {
+      return outcome.set(StartTagOutcome.PARKED, -1);
+    }
+    if (result.selfClosing) {
+      closeNode(self);
+      self.justClosedTag = true;
+      return outcome.set(StartTagOutcome.CONTINUE, result.newPosition);
+    }
+    self.isFirstTextInElement = true;
+    if (builtin == Consts.TAG_SCRIPT && tagId == Consts.TAG_SCRIPT) {
+      int close = processScriptChunk(self, chunk, result.newPosition);
+      if (close >= 0) {
+        return outcome.set(StartTagOutcome.CONTINUE, close);
+      }
+      // Only the partial `</scr…` is carried, never the script text.
+      return outcome.set(StartTagOutcome.CARRY, -close - 1);
+    }
+    return outcome.set(StartTagOutcome.CONTINUE, result.newPosition);
+  }
+
+  /** Drops the pending start-tag name when the node cap says it can only be payload. */
+  private static void discardPendingTagNameIfOverCap(ConvertState self, StringBuilder textBuffer) {
+    if (self.maxNodeBytesInt == 0
+        || 1L + self.pendingTagName.length() <= self.maxNodeBytesInt
+        || self.pendingTagName.length() <= Consts.MAX_BUILTIN_TAG_NAME) {
+      return;
+    }
+    completeTextNode(self, textBuffer);
+    self.truncated = true;
+    self.discard = ConvertState.Discard.tag(self.pendingTagNameScan);
+    self.pendingTagName = null;
+    self.pendingTagNameScan = null;
+  }
+
+  /** Retains an end tag whose name ran past the chunk boundary, instead of carrying raw bytes. */
+  private static void startPendingCloseTag(ConvertState self, String chunk, int tagStart) {
+    int nameStart = tagStart + 2;
+    self.pendingCloseTagName = new StringBuilder(chunk.length() - nameStart + 16);
+    self.pendingCloseTagName.append(chunk, nameStart, chunk.length());
+    closeTagOverCap(self);
+  }
+
+  private static void clearPendingCloseTag(ConvertState self) {
+    self.pendingCloseTagName = null;
+  }
+
+  /** Applies the over-cap end-tag rule: the name is payload, so the whole token is dropped. */
+  private static void closeTagOverCap(ConvertState self) {
+    StringBuilder name = self.pendingCloseTagName;
+    if (self.maxNodeBytesInt == 0
+        || 2L + name.length() <= self.maxNodeBytesInt
+        || name.length() <= Consts.MAX_BUILTIN_TAG_NAME) {
+      return;
+    }
+    clearPendingCloseTag(self);
+    self.lastNodeIsInline = true;
+    self.justClosedTag = true;
+    self.discard = ConvertState.Discard.closeTag(new Scan.DiscardedCloseTag());
+  }
+
+  /**
+   * Continues an end tag whose name ran past a chunk boundary, consuming the chunk instead of
+   * re-reading the carried prefix. Returns the index after the tag's {@code >}, or -1 when the
+   * chunk is exhausted (state is retained) or the token was dropped.
+   */
+  private static int resumeClosingTag(ConvertState self, String chunk) {
+    StringBuilder name = self.pendingCloseTagName;
+    int chunkLength = chunk.length();
+    // A pending name always resumes before its delimiter: the name ended is signalled by the
+    // discard the previous call started, never by the pending state.
+    boolean nameEnded = false;
+    char quote = 0;
+    int i = 0;
+    while (i < chunkLength) {
+      char c = chunk.charAt(i);
+      if (!nameEnded) {
+        if (Scan.isWhitespace(c) || c == '/' || c == '>') {
+          nameEnded = true;
+        } else {
+          name.append(c);
+          i++;
+          continue;
+        }
+      }
+      // Past the name: the same tokenizer as processClosingTag, where a `>` inside a quoted
+      // parse-error attribute does not end the token.
+      if (quote != 0) {
+        if (c == quote) {
+          quote = 0;
+        }
+      } else if (c == '"' || c == '\'') {
+        quote = c;
+      } else if (c == '>') {
+        String nameRaw = name.toString();
+        clearPendingCloseTag(self);
+        // Upstream re-feeds the raw tag when this returns false. That needs the top non-nesting
+        // node's tag id to differ from the resolution of the very name that selected it, which
+        // cannot happen, so the tag is simply ignored here.
+        processClosingTagName(self, nameRaw);
+        return i + 1;
+      }
+      i++;
+    }
+
+    if (nameEnded) {
+      // The name is complete but its `>` is in a later chunk. Upstream starts dropping the token
+      // here and still applies the name; mirror that without carrying the bytes.
+      String nameRaw = name.toString();
+      clearPendingCloseTag(self);
+      processClosingTagName(self, nameRaw);
+      Scan.DiscardedCloseTag state = new Scan.DiscardedCloseTag();
+      state.nameEnded = true;
+      state.quote = quote;
+      self.discard = ConvertState.Discard.closeTag(state);
+    } else {
+      closeTagOverCap(self);
+    }
+    return -1;
+  }
+
   static int processHtml(ConvertState self, String chunk) {
     if (self.heldOutputExceeded) {
       return dropAfterHeldOutputExceeded(self, self.parseTextBuffer, chunk.length());
@@ -1941,7 +2129,57 @@ final class ParseOps {
       }
     }
 
-    if (self.stack.size() > 0) {
+    // A start tag whose name ran past the previous chunk. Its bytes were consumed there, so
+    // continue from this chunk's first byte instead of re-reading the carried prefix.
+    boolean stopScanning = false;
+    boolean resumedStartTag = false;
+    if (self.pendingTagName != null) {
+      resumedStartTag = true;
+      int nameStop = Scan.tagNameEnd(chunk, 0);
+      self.pendingTagName.append(chunk, 0, nameStop);
+      if (nameStop >= chunkLength) {
+        Scan.PendingTagScan scan = self.pendingTagNameScan;
+        if (scan != null) {
+          scan.restart();
+          Scan.tagIsComplete(chunk, 0, scan);
+        }
+        discardPendingTagNameIfOverCap(self, textBuffer);
+        return chunkLength;
+      }
+      String tagNameRaw = self.pendingTagName.toString();
+      self.pendingTagName = null;
+      self.pendingTagNameScan = null;
+      StartTagOutcome outcome = applyStartTag(self, textBuffer, tagNameRaw, chunk, nameStop);
+      switch (outcome.kind) {
+        case StartTagOutcome.CONTINUE:
+          i = outcome.newPosition;
+          break;
+        case StartTagOutcome.CARRY:
+          runStart = outcome.newPosition;
+          carry = true;
+          carryBounded = true;
+          stopScanning = true;
+          break;
+        case StartTagOutcome.HELD_OUTPUT:
+          return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+        default:
+          // The attribute scan parked in `pendingStart`; every byte is consumed.
+          return chunkLength;
+      }
+    }
+
+    // An end tag whose name ran past the previous chunk. Its name bytes are in state.
+    boolean resumedEndTag = false;
+    if (self.pendingCloseTagName != null) {
+      resumedEndTag = true;
+      int end = resumeClosingTag(self, chunk);
+      if (end < 0) {
+        return chunkLength;
+      }
+      i = end;
+    }
+
+    if (!resumedStartTag && !resumedEndTag && self.stack.size() > 0) {
       ElementNode scriptTop = self.stack.get(self.stack.size() - 1);
       if (scriptTop.tagId == Consts.TAG_SCRIPT
           && (scriptTop.customName() == null || scriptTop.customName().equals("script"))) {
@@ -1957,7 +2195,7 @@ final class ParseOps {
       }
     }
 
-    while (i < chunkLength) {
+    while (!stopScanning && i < chunkLength) {
       if (textBuffer.length() == 0) {
         runStart = i;
       }
@@ -2274,7 +2512,13 @@ final class ParseOps {
         CloseTagResult result = processClosingTag(self, chunk, i);
         if (result.complete) {
           i = result.newPosition;
+        } else if (!result.nameEnded) {
+          // The name runs past the chunk. Keep only its bytes and consume the rest, so the
+          // stream never carries (and re-reads) the growing raw prefix.
+          startPendingCloseTag(self, chunk, i);
+          return chunkLength;
         } else {
+          // The name ended but its `>` is still to come: drop the token without carrying it.
           carry = true;
           carryBounded = result.boundedPrefix;
           discardEndTag = result.nameEnded;
@@ -2307,68 +2551,40 @@ final class ParseOps {
         int tagNameStart = i2;
         int nameStop = Scan.tagNameEnd(chunk, i2);
         if (nameStop >= chunkLength) {
-          runStart = i;
-          carry = true;
-          carryBounded = chunkLength - tagNameStart <= Consts.MAX_BUILTIN_TAG_NAME;
-          break;
-        }
-        int tagNameEnd = nameStop;
-        String tagNameRaw = chunk.substring(tagNameStart, tagNameEnd);
-
-        Integer builtinBoxed = Consts.get_tag_id_ci_bytes(utf8(tagNameRaw));
-        int builtin = builtinBoxed == null ? -1 : builtinBoxed;
-        String tagName;
-        if (builtin >= 0) {
-          tagName = tagNameRaw;
-        } else if (hasAsciiUpper(tagNameRaw)) {
-          tagName = Chars.asciiLower(tagNameRaw);
-        } else {
-          tagName = tagNameRaw;
-        }
-        String name = tagName;
-        int tagId = builtin;
-        boolean isBuiltin = builtin >= 0;
-        if (self.hasTagOverrides) {
-          int alias = self.aliasTagId(name, builtin);
-          if (alias >= 0) {
-            if (builtin >= 0) {
-              name = Consts.TAG_NAMES[builtin];
-            }
-            tagId = alias;
-            isBuiltin = false;
+          // The name is the rest of this chunk. Keep only its bytes (plus the tokenizer state
+          // the cap path may need) and consume the chunk, instead of carrying the raw prefix.
+          self.pendingTagName = new StringBuilder(chunkLength - tagNameStart + 16);
+          self.pendingTagName.append(chunk, tagNameStart, chunkLength);
+          if (maxNodeBytes != 0) {
+            // Only the cap path needs the dropped-token scan; without a cap it is unreachable.
+            Scan.PendingTagScan scan = new Scan.PendingTagScan();
+            Scan.tagIsComplete(chunk, i, scan);
+            self.pendingTagNameScan = scan;
           }
+          discardPendingTagNameIfOverCap(self, textBuffer);
+          return chunkLength;
         }
-        i2 = tagNameEnd;
+        String tagNameRaw = chunk.substring(tagNameStart, nameStop);
 
-        completeTextNode(self, textBuffer);
-        if (self.heldOutputExceeded) {
-          return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+        StartTagOutcome outcome = applyStartTag(self, textBuffer, tagNameRaw, chunk, nameStop);
+        switch (outcome.kind) {
+          case StartTagOutcome.CONTINUE:
+            i = outcome.newPosition;
+            break;
+          case StartTagOutcome.CARRY:
+            runStart = outcome.newPosition;
+            carry = true;
+            carryBounded = true;
+            stopScanning = true;
+            break;
+          case StartTagOutcome.HELD_OUTPUT:
+            return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+          default:
+            // The attribute scan parked in `pendingStart`; every byte is consumed.
+            stopScanning = true;
+            break;
         }
-        runStart = i;
-
-        OpeningTagResult result = processOpeningTag(self, name, tagId, isBuiltin, chunk, i2);
-        if (result.skip) {
-          i = result.newPosition;
-        } else if (result.complete) {
-          i = result.newPosition;
-          if (result.selfClosing) {
-            closeNode(self);
-            self.justClosedTag = true;
-          } else {
-            self.isFirstTextInElement = true;
-            if (builtin == Consts.TAG_SCRIPT && tagId == Consts.TAG_SCRIPT) {
-              int close = processScriptChunk(self, chunk, i);
-              if (close >= 0) {
-                i = close;
-              } else {
-                runStart = -close - 1;
-                carry = true;
-                carryBounded = true;
-                break;
-              }
-            }
-          }
-        } else {
+        if (stopScanning) {
           break;
         }
       }
@@ -2827,6 +3043,17 @@ final class ParseOps {
 
   static void finalizeState(ConvertState self, String leftover) {
     String rest = leftover == null ? "" : leftover;
+    // A tag name that ran past the last chunk was consumed into state instead of being carried
+    // raw. Rebuild the prefix so the residual handling below sees exactly what a one-shot parse
+    // would still be holding at EOF.
+    if (self.pendingTagName != null) {
+      rest = "<" + self.pendingTagName + rest;
+      self.pendingTagName = null;
+      self.pendingTagNameScan = null;
+    } else if (self.pendingCloseTagName != null) {
+      rest = "</" + self.pendingCloseTagName + rest;
+      clearPendingCloseTag(self);
+    }
     ElementNode last = self.stack.size() == 0 ? null : self.stack.get(self.stack.size() - 1);
     boolean inScript =
         last != null
