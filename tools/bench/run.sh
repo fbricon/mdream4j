@@ -9,6 +9,7 @@
 # Environment:
 #   MVN        Maven command (default ./mvnw)
 #   JAVA       java command (default java)
+#   MODULES    space-separated subset, e.g. MODULES="mdream4j reference"
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -23,7 +24,11 @@ fi
 # shellcheck disable=SC2086
 "$MVN" -q $PROFILES -DskipTests package
 
-modules=(mdream4j flexmark-published flexmark-patched remark copy-down jsoup xberg reference)
+if [ -n "${MODULES:-}" ]; then
+  read -r -a modules <<< "$MODULES"
+else
+  modules=(mdream4j flexmark-published flexmark-patched remark copy-down jsoup xberg reference)
+fi
 for module in "${modules[@]}"; do
   jar="mdream4j-bench/$module/target/benchmarks.jar"
   if [ ! -f "$jar" ]; then

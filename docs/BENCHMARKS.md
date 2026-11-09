@@ -80,8 +80,8 @@ output is stable between setup and teardown.
 `@Setup(Level.Trial)` and inputs are held in a field. Cold start is a separate
 `SingleShotTime` benchmark with one invocation per fork.
 
-Run the matrix on JDK 11 and 25; report headline numbers on 11. `xberg` and the Rust
-reference only run on 25.
+Run the matrix on JDK 11 and 25. `xberg` and the Rust reference only load on 25, so
+the results below are from 25; the JDK 11 target below still applies to the library.
 
 ## Targets
 
@@ -95,7 +95,7 @@ reference only run on 25.
 
 ## Results
 
-Measured on Temurin 25.0.4.1, macOS arm64 (Apple silicon), `-Xms2g -Xmx2g`,
+Measured on Temurin 25.0.5+8, macOS arm64 (Apple silicon), `-Xms2g -Xmx2g`,
 with a shortened matrix: 2 × 1 s warmup, 3 × 1 s measurement, 1 fork, `-prof gc`.
 The committed defaults (3 × 2 s / 5 × 2 s / 3 forks) give the same ordering with
 tighter error bars.
@@ -104,16 +104,16 @@ Milliseconds per conversion, lower is better:
 
 | Fixture | mdream4j | mdream (Rust) | flexmark pub | flexmark patched | remark | copy_down | jsoup parse | xberg |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| nuxt (3.5 KB) | 0.0091 | 0.0100 | 0.065 | 0.066 | 0.056 | 0.337 | 0.021 | 0.067 |
-| wikipedia (166 KB) | 0.711 | 0.574 | 3.163 | 3.267 | 3.152 | 38.45 | 1.548 | 5.458 |
-| mdn (235 KB) | 1.274 | 1.032 | 8.315 | 5.822 | 4.499 | 55.15 | 1.996 | 8.393 |
-| github (430 KB) | 0.856 | 1.538 | 4.551 | 4.387 | 3.364 | 60.58 | 1.902 | 8.888 |
-| react (265 KB) | 0.720 | 0.849 | 2.885 | 2.812 | 2.766 | 18.39 | 2.040 | 8.778 |
-| wikipedia-xl (1.8 MB) | 11.75 | 8.404 | n/r | n/r | n/r | n/r | n/r | n/r |
-| depth-512 | 0.057 | 0.047 | 0.774 | 0.322 | 1.133 | 2.667 | 0.288 | 0.291 |
-| table-huge (2000×8) | 3.422 | 2.592 | 29.90 | 28.58 | 17.30 | 4901.84 | 4.269 | 19.48 |
-| node-1mb | 0.863 | 1.787 | n/r | n/r | n/r | n/r | n/r | n/r |
-| text-10mb | 9.163 | 22.19 | n/r | n/r | n/r | n/r | n/r | n/r |
+| nuxt (3.5 KB) | 0.0097 | 0.0098 | 0.065 | 0.064 | 0.056 | 0.333 | 0.020 | 0.064 |
+| wikipedia (166 KB) | 0.711 | 0.570 | 2.884 | 2.859 | 3.137 | 37.48 | 1.325 | 5.270 |
+| mdn (235 KB) | 1.072 | 0.973 | 5.917 | 5.763 | 4.395 | 52.89 | 1.724 | 8.103 |
+| github (430 KB) | 0.903 | 1.446 | 4.469 | 4.237 | 3.270 | 58.84 | 1.826 | 8.627 |
+| react (265 KB) | 0.737 | 0.843 | 2.852 | 2.744 | 2.693 | 18.19 | 1.975 | 8.349 |
+| wikipedia-xl (1.8 MB) | 11.88 | 8.391 | n/r | n/r | n/r | n/r | n/r | n/r |
+| depth-512 | 0.0582 | 0.0440 | 0.647 | 0.310 | 1.156 | 2.563 | 0.271 | 0.295 |
+| table-huge (2000×8) | 3.711 | 2.636 | 27.06 | 26.16 | 16.89 | 4557.71 | 4.040 | 18.41 |
+| node-1mb | 0.924 | 1.769 | n/r | n/r | n/r | n/r | n/r | n/r |
+| text-10mb | 9.795 | 21.08 | n/r | n/r | n/r | n/r | n/r | n/r |
 
 `n/r` means not run: flexmark on `wikipedia-xl` takes around 100 s per
 conversion (the markdown→HTML→markdown pipeline is super-linear), and the
@@ -126,24 +126,24 @@ Allocation, MB per conversion (`gc.alloc.rate.norm`):
 | Fixture | mdream4j | mdream (Rust) | flexmark patched | remark |
 |---|---:|---:|---:|---:|
 | nuxt | 0.02 | 0.01 | 0.07 | 0.08 |
-| wikipedia | 1.70 | 0.61 | 4.27 | 5.91 |
-| mdn | 2.35 | 0.98 | 6.40 | 6.90 |
-| github | 1.72 | 1.15 | 6.42 | 5.73 |
-| react | 1.55 | 0.71 | 3.76 | 5.72 |
-| wikipedia-xl | 29.44 | 9.27 | n/r | n/r |
+| wikipedia | 1.65 | 0.61 | 4.24 | 5.94 |
+| mdn | 2.34 | 0.98 | 6.35 | 6.90 |
+| github | 1.69 | 1.15 | 6.42 | 5.72 |
+| react | 1.53 | 0.71 | 3.76 | 5.72 |
+| wikipedia-xl | 28.84 | 9.27 | n/r | n/r |
 | depth-512 | 0.17 | 0.01 | 0.63 | 0.74 |
-| table-huge | 7.88 | 1.13 | 61.09 | 66.69 |
+| table-huge | 7.88 | 1.13 | 61.20 | 65.65 |
 
 Headlines:
 
-- mdream4j is 0.4–0.9× the Rust reference on large documents (`github`,
-  `node-1mb`, `text-10mb`) and 1.2–1.4× on the others; the Rust build is
-  SIMD-assisted while the port is plain Java.
-- It is 3–7× faster than flexmark, remark and jsoup on real pages, and 10–20×
-  faster than xberg.
+- mdream4j is 0.46–0.87× the Rust reference on the large documents
+  (`text-10mb`, `node-1mb`, `github`, `react`) and 1.0–1.4× on the others; the
+  Rust build is SIMD-assisted while the port is plain Java.
+- It is 3.6–6.6× faster than flexmark and remark on real pages, 1.6–2.7×
+  faster than jsoup's parse floor, and 6.6–11× faster than xberg.
 - Allocation stays within Rust's order of magnitude and well under flexmark's
   and remark's.
-- `text-10mb` at 9.2 ms is about 1.1 GB/s of input, so the text-run window is
+- `text-10mb` at 9.8 ms is about 1.0 GB/s of input, so the text-run window is
   linear in input size rather than quadratic.
 
 ## Native image

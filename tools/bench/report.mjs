@@ -49,7 +49,8 @@ for (const module of fs.readdirSync(bench, { withFileTypes: true })) {
     if (entry.mode !== "avgt") {
       continue;
     }
-    const simple = entry.benchmark.split(".").pop();
+    const parts = entry.benchmark.split(".");
+    const simple = parts[parts.length - 2];
     const fixture = entry.params?.fixtureName ?? "";
     const millis = entry.primaryMetric?.score;
     if (millis === undefined) {
