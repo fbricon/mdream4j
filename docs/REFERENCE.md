@@ -5,7 +5,7 @@ published and the library never loads it.
 
 It has three jobs:
 
-1. Generate the checked-in golden corpus (`golden/*.jsonl`).
+1. Generate the checked-in golden file (`golden/expected.jsonl`).
 2. Differential fuzzing: Java output must equal the reference output.
 3. Benchmark baseline ("OG mdream") in the same JVM.
 
@@ -48,12 +48,12 @@ Tests are skipped with an assumption when the native library is missing.
 ```shell
 node tools/corpus/extract.mjs
 cargo run --quiet --release --manifest-path tools/reference/Cargo.toml \
-  --bin mdream-golden -- tools/corpus/corpus.jsonl > golden/corpus.jsonl
+  --bin mdream-golden -- tools/corpus/cases.jsonl > golden/expected.jsonl
 ```
 
 `tools/corpus/extract.mjs` pulls inputs from the upstream TypeScript conversion corpus and the
-upstream HTML fixture pages. Expected outputs are always produced by the Rust reference, never
-hand-written.
+upstream HTML fixture pages into `tools/corpus/cases.jsonl`. Expected outputs are always produced
+by the Rust reference, never hand-written, into `golden/expected.jsonl`.
 
 The golden file is checked in; normal builds do not need Rust, Node or the submodule.
 

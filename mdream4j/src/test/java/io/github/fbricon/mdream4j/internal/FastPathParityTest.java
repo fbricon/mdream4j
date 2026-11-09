@@ -5,6 +5,8 @@
  */
 package io.github.fbricon.mdream4j.internal;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -16,14 +18,19 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * The plain-text fast paths must be byte-transparent: skipping the per-node general emitter and
  * gate branches must never change the output.
  *
  * <p>Ports the upstream {@code fast_paths} differential test over the whole golden corpus, one
- * shot and streamed at several chunk sizes.
+ * shot and streamed at several chunk sizes. Each corpus case is its own JUnit invocation.
  */
 class FastPathParityTest {
 
@@ -33,37 +40,72 @@ class FastPathParityTest {
   private static final int LARGE_INPUT = 200_000;
   private static final int LARGE_INPUT_MIN_CHUNK = 64;
 
+  /** Guards against silently dropping cases when the golden file is regenerated. */
   @Test
-  void oneShotFastAndGeneralPathsAgree() throws IOException {
-    List<Map<String, Object>> cases = Corpus.loadCases();
-    assertTrue(cases.size() >= 1190, "corpus must not shrink: " + cases.size());
+  void corpusDoesNotShrink() throws IOException {
+    int size = Corpus.loadCases().size();
+    assertTrue(size >= 1218, "corpus must not shrink: " + size);
+  }
 
-    List<String> failures = new ArrayList<>();
-    int checks = 0;
-    for (Map<String, Object> corpusCase : cases) {
-      String id = (String) corpusCase.get("id");
-      String html = (String) corpusCase.get("html");
-      Options options = Corpus.options(corpusCase, OutputFormat.MARKDOWN);
+  static Stream<Arguments> cases() throws IOException {
+    return Corpus.loadCases().stream().map(corpusCase -> Arguments.of(corpusCase.get("id"), corpusCase));
+  }
 
-      MdreamResult fast = Engine.convertResult(html, options, true);
-      MdreamResult general = Engine.convertResult(html, options, false);
-      checks++;
-      if (!fast.markdown().equals(general.markdown()) && failures.size() < 20) {
-        failures.add(
-            id
-                + "\n  fast:    "
-                + escape(fast.markdown())
-                + "\n  general: "
-                + escape(general.markdown()));
-      } else if (fast.truncated() != general.truncated() && failures.size() < 20) {
-        failures.add(id + "\n  truncated differs: " + fast.truncated() + " vs " + general.truncated());
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("cases")
+  void oneShotFastAndGeneralPathsAgree(String id, Map<String, Object> corpusCase) {
+    String html = (String) corpusCase.get("html");
+    Options options = Corpus.options(corpusCase, OutputFormat.MARKDOWN);
+
+    MdreamResult fast = Engine.convertResult(html, options, true);
+    MdreamResult general = Engine.convertResult(html, options, false);
+
+    assertAll(
+        id,
+        () ->
+            assertEquals(
+                general.markdown(),
+                fast.markdown(),
+                () ->
+                    id
+                        + "\n  fast:    "
+                        + escape(fast.markdown())
+                        + "\n  general: "
+                        + escape(general.markdown())),
+        () ->
+            assertEquals(
+                general.truncated(),
+                fast.truncated(),
+                () -> id + " truncated differs: " + fast.truncated() + " vs " + general.truncated()));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("cases")
+  void streamedFastAndGeneralPathsAgree(String id, Map<String, Object> corpusCase) {
+    String html = (String) corpusCase.get("html");
+    Options options = Corpus.options(corpusCase, OutputFormat.MARKDOWN);
+
+    List<Executable> checks = new ArrayList<>();
+    for (int size : CHUNK_SIZES) {
+      if (html.length() > LARGE_INPUT && size < LARGE_INPUT_MIN_CHUNK) {
+        continue;
       }
+      String fast = stream(html, size, options, true);
+      String general = stream(html, size, options, false);
+      String label = id + " size=" + size;
+      checks.add(
+          () ->
+              assertEquals(
+                  general,
+                  fast,
+                  () ->
+                      label
+                          + "\n  fast:    "
+                          + escape(fast)
+                          + "\n  general: "
+                          + escape(general)));
     }
-
-    assertTrue(
-        failures.isEmpty(),
-        failures.size() + " fast-path mismatch(es):\n" + String.join("\n", failures));
-    assertTrue(checks > 0, "no fast-path checks ran");
+    assertAll(id, checks);
   }
 
   @Test
@@ -81,43 +123,6 @@ class FastPathParityTest {
 
     ConvertState text = new ConvertState(Options.builder().format(OutputFormat.TEXT).build(), 1024);
     assertFalse(ParseOps.textNodeFastPathOk(text), "only markdown has the fast path");
-  }
-
-  @Test
-  void streamedFastAndGeneralPathsAgree() throws IOException {
-    List<Map<String, Object>> cases = Corpus.loadCases();
-    assertTrue(cases.size() >= 1190, "corpus must not shrink: " + cases.size());
-
-    List<String> failures = new ArrayList<>();
-    int checks = 0;
-    for (Map<String, Object> corpusCase : cases) {
-      String id = (String) corpusCase.get("id");
-      String html = (String) corpusCase.get("html");
-      Options options = Corpus.options(corpusCase, OutputFormat.MARKDOWN);
-      for (int size : CHUNK_SIZES) {
-        if (html.length() > LARGE_INPUT && size < LARGE_INPUT_MIN_CHUNK) {
-          continue;
-        }
-        checks++;
-        String fast = stream(html, size, options, true);
-        String general = stream(html, size, options, false);
-        if (!fast.equals(general) && failures.size() < 20) {
-          failures.add(
-              id
-                  + " size="
-                  + size
-                  + "\n  fast:    "
-                  + escape(fast)
-                  + "\n  general: "
-                  + escape(general));
-        }
-      }
-    }
-
-    assertTrue(
-        failures.isEmpty(),
-        failures.size() + " streaming fast-path mismatch(es):\n" + String.join("\n", failures));
-    assertTrue(checks > 0, "no streaming fast-path checks ran");
   }
 
   private static String stream(String html, int chunk, Options options, boolean fastPaths) {

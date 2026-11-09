@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Builds tools/corpus/corpus.jsonl from upstream sources.
+// Builds tools/corpus/cases.jsonl from upstream sources.
 //
 // The upstream corpus is a TypeScript array of HTML inputs; expected outputs
 // come from the Rust reference, not from this script. Fixture pages are added
@@ -15,7 +15,7 @@ import { collectRustCases } from "./rust-cases.mjs";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "../..");
 const upstream = path.join(repo, "tools/upstream");
-const corpusPath = path.join(repo, "tools/corpus/corpus.jsonl");
+const corpusPath = path.join(repo, "tools/corpus/cases.jsonl");
 
 const cases = [];
 

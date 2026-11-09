@@ -5,8 +5,10 @@
  */
 package io.github.fbricon.mdream4j.internal;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import io.github.fbricon.mdream4j.Clean;
 import io.github.fbricon.mdream4j.Corpus;
@@ -18,7 +20,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Draining must be byte-transparent: a stream produces the same output with it on or off, for any
@@ -68,7 +75,10 @@ class StreamingDrainTest {
       for (Options options : optionSets) {
         for (int chunk : new int[] {1, 3, 7, 64, html.length()}) {
           checks++;
-          compare("check " + checks, html, chunk, options, failures);
+          String failure = compare("check " + checks, html, chunk, options);
+          if (failure != null && failures.size() < 20) {
+            failures.add(failure);
+          }
         }
       }
     }
@@ -98,42 +108,50 @@ class StreamingDrainTest {
     }
   }
 
+  /** Guards against silently dropping cases when the golden file is regenerated. */
   @Test
-  void goldenCorpusStreamsIdenticallyWithAndWithoutDraining() throws IOException {
-    List<Map<String, Object>> cases = Corpus.loadCases();
-    assertTrue(cases.size() >= 1190, "corpus must not shrink: " + cases.size());
+  void corpusDoesNotShrink() throws IOException {
+    int size = Corpus.loadCases().size();
+    assertTrue(size >= 1218, "corpus must not shrink: " + size);
+  }
 
-    List<String> failures = new ArrayList<>();
-    int checks = 0;
-    for (Map<String, Object> corpusCase : cases) {
-      String id = (String) corpusCase.get("id");
-      String html = (String) corpusCase.get("html");
-      for (OutputFormat format : STREAMED_FORMATS) {
-        Options options = Corpus.options(corpusCase, format);
-        for (int size : CHUNK_SIZES) {
-          if (html.length() > LARGE_INPUT && size < LARGE_INPUT_MIN_CHUNK) {
-            continue;
-          }
-          checks++;
-          compare(id + " " + format + " size=" + size, html, size, options, failures);
+  static Stream<Arguments> cases() throws IOException {
+    return Corpus.loadCases().stream().map(corpusCase -> Arguments.of(corpusCase.get("id"), corpusCase));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("cases")
+  void goldenCorpusStreamsIdenticallyWithAndWithoutDraining(
+      String id, Map<String, Object> corpusCase) {
+    String html = (String) corpusCase.get("html");
+    List<Executable> failures = new ArrayList<>();
+    for (OutputFormat format : STREAMED_FORMATS) {
+      Options options = Corpus.options(corpusCase, format);
+      for (int size : CHUNK_SIZES) {
+        if (html.length() > LARGE_INPUT && size < LARGE_INPUT_MIN_CHUNK) {
+          continue;
+        }
+        String failure = compare(id + " " + format + " size=" + size, html, size, options);
+        if (failure != null) {
+          failures.add(() -> fail(failure));
         }
       }
     }
-    assertTransparent(failures, checks);
+    assertAll(id, failures);
   }
 
-  private static void compare(
-      String label, String html, int chunk, Options options, List<String> failures) {
+  /** Returns a description of the drain mismatch, or {@code null} when the output is identical. */
+  private static String compare(String label, String html, int chunk, Options options) {
     String drained = stream(html, chunk, options, false);
     String undrained = stream(html, chunk, options, true);
-    if (!drained.equals(undrained) && failures.size() < 20) {
-      failures.add(
-          label
-              + "\n  drained:   "
-              + escape(drained)
-              + "\n  undrained: "
-              + escape(undrained));
+    if (drained.equals(undrained)) {
+      return null;
     }
+    return label
+        + "\n  drained:   "
+        + escape(drained)
+        + "\n  undrained: "
+        + escape(undrained);
   }
 
   private static String stream(String html, int chunk, Options options, boolean disableDrain) {

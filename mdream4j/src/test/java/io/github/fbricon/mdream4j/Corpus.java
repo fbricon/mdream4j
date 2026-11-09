@@ -15,7 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Loads {@code golden/corpus.jsonl} for the differential tests. */
+/** Loads {@code golden/expected.jsonl} for the differential tests. */
 public final class Corpus {
 
   private Corpus() {}
@@ -37,12 +37,12 @@ public final class Corpus {
   static Path findCorpus() {
     Path here = Paths.get("").toAbsolutePath();
     for (Path dir = here; dir != null; dir = dir.getParent()) {
-      Path candidate = dir.resolve("golden").resolve("corpus.jsonl");
+      Path candidate = dir.resolve("golden").resolve("expected.jsonl");
       if (Files.isRegularFile(candidate)) {
         return candidate;
       }
     }
-    throw new IllegalStateException("golden/corpus.jsonl not found above " + here);
+    throw new IllegalStateException("golden/expected.jsonl not found above " + here);
   }
 
   /** Builds the case's options for Markdown output. */

@@ -5,17 +5,29 @@
  */
 package io.github.fbricon.mdream4j;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Streaming parity: concatenating every chunk a {@link MarkdownStream} returns must be
  * byte-identical to one-shot conversion, at every chunk size and for every output format.
+ *
+ * <p>Each corpus case is its own JUnit invocation, named by corpus id; every format and chunk size
+ * for that case is checked as a named assertion, so all of them are reported before the invocation
+ * fails.
  *
  * <p>Small chunk sizes are skipped for very large documents because the sweep would otherwise be
  * quadratic; the interesting boundary behaviour is covered by every other case.
@@ -32,59 +44,58 @@ class GoldenStreamingTest {
   private static final int LARGE_INPUT = 200_000;
   private static final int LARGE_INPUT_MIN_CHUNK = 64;
 
+  /** Guards against silently dropping cases when the golden file is regenerated. */
   @Test
-  void feedConcatenationMatchesOneShot() throws IOException {
-    List<Map<String, Object>> cases = Corpus.loadCases();
-    assertTrue(cases.size() >= 1190, "corpus must not shrink: " + cases.size());
+  void corpusDoesNotShrink() throws IOException {
+    int size = Corpus.loadCases().size();
+    assertTrue(size >= 1218, "corpus must not shrink: " + size);
+  }
 
-    List<String> failures = new ArrayList<>();
-    int checks = 0;
-    for (Map<String, Object> corpusCase : cases) {
-      String id = (String) corpusCase.get("id");
-      String html = (String) corpusCase.get("html");
-      @SuppressWarnings("unchecked")
-      Map<String, Object> outputs = (Map<String, Object>) corpusCase.get("outputs");
-      boolean expectedTruncated = Boolean.TRUE.equals(outputs.get("truncated"));
+  static Stream<Arguments> cases() throws IOException {
+    return Corpus.loadCases().stream().map(corpusCase -> Arguments.of(corpusCase.get("id"), corpusCase));
+  }
 
-      for (OutputFormat format : FORMATS) {
-        String expected = (String) outputs.get(format.name().toLowerCase(java.util.Locale.ROOT));
-        for (int size : CHUNK_SIZES) {
-          if (html.length() > LARGE_INPUT && size < LARGE_INPUT_MIN_CHUNK) {
-            continue;
-          }
-          checks++;
-          MarkdownStream stream = HtmlToMarkdown.newStream(Corpus.options(corpusCase, format));
-          StringBuilder out = new StringBuilder();
-          for (int start = 0; start < html.length(); start += size) {
-            out.append(stream.feed(html.substring(start, Math.min(html.length(), start + size))));
-          }
-          out.append(stream.finish());
-          String actual = out.toString();
-          boolean truncatedMismatch =
-              format == OutputFormat.MARKDOWN && stream.truncated() != expectedTruncated;
-          if (!expected.equals(actual) || truncatedMismatch) {
-            if (failures.size() < 20) {
-              failures.add(
-                  id
-                      + " "
-                      + format
-                      + " size="
-                      + size
-                      + "\n  expected: "
-                      + escape(expected)
-                      + "\n  actual:   "
-                      + escape(actual)
-                      + (truncatedMismatch ? "\n  truncated flag differs" : ""));
-            }
-          }
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("cases")
+  void feedConcatenationMatchesOneShot(String id, Map<String, Object> corpusCase) {
+    String html = (String) corpusCase.get("html");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> outputs = (Map<String, Object>) corpusCase.get("outputs");
+    boolean expectedTruncated = Boolean.TRUE.equals(outputs.get("truncated"));
+
+    List<Executable> checks = new ArrayList<>();
+    for (OutputFormat format : FORMATS) {
+      String expected = (String) outputs.get(format.name().toLowerCase(Locale.ROOT));
+      for (int size : CHUNK_SIZES) {
+        if (html.length() > LARGE_INPUT && size < LARGE_INPUT_MIN_CHUNK) {
+          continue;
+        }
+        MarkdownStream stream = HtmlToMarkdown.newStream(Corpus.options(corpusCase, format));
+        StringBuilder out = new StringBuilder();
+        for (int start = 0; start < html.length(); start += size) {
+          out.append(stream.feed(html.substring(start, Math.min(html.length(), start + size))));
+        }
+        out.append(stream.finish());
+        String actual = out.toString();
+        String label = id + " " + format + " size=" + size;
+        checks.add(
+            () ->
+                assertEquals(
+                    expected,
+                    actual,
+                    () -> label + "\n  expected: " + escape(expected) + "\n  actual:   " + escape(actual)));
+        if (format == OutputFormat.MARKDOWN) {
+          boolean actualTruncated = stream.truncated();
+          checks.add(
+              () ->
+                  assertEquals(
+                      expectedTruncated,
+                      actualTruncated,
+                      () -> label + " truncated flag differs"));
         }
       }
     }
-
-    assertTrue(
-        failures.isEmpty(),
-        failures.size() + " streaming mismatch(es):\n" + String.join("\n", failures));
-    assertTrue(checks >= 3000, "streaming checks must not shrink: " + checks);
+    assertAll(id, checks);
   }
 
   private static String escape(String value) {

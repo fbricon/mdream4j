@@ -10,7 +10,7 @@ corpus:
 
 goldens: reference corpus
 	$(CARGO) run --quiet --release --manifest-path tools/reference/Cargo.toml \
-		--bin mdream-golden -- tools/corpus/corpus.jsonl > golden/corpus.jsonl
+		--bin mdream-golden -- tools/corpus/cases.jsonl > golden/expected.jsonl
 
 bench:
 	./tools/bench/run.sh
