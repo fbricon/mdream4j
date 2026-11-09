@@ -700,7 +700,10 @@ Primary:
 - jsoup security advisories — https://github.com/jhy/jsoup/security/advisories
 
 Secondary (benchmarks, prior art):
-- mdream README benchmarks — `/Users/fbricon/Dev/souk/mdream/README.md` §Benchmarks
-- mdream repo facts — `crates/Cargo.toml`, `crates/core/src`, `crates/node/package.json`, `AGENTS.md`, `git log`
+- mdream README benchmarks —
+  [README.md at `9ea07b84`](https://github.com/harlan-zw/mdream/blob/9ea07b841c29f7d26ebb4122829ecb3201265bc3/README.md)
+  §Benchmarks
+- mdream repo facts — upstream `crates/Cargo.toml`, `crates/core/src`, `crates/node/package.json`,
+  `AGENTS.md`, `git log`
 - `zakgof/java-native-benchmark` (JMH: FFM 49.7 ns vs JNI 56.6 ns call-only) — https://github.com/zakgof/java-native-benchmark
 - Local spike sources: `…/T/opencode/ffm-spike/{src/lib.rs,FfmBench.java,CriticalBench.java,AbiBench.java,StreamBench.java,UpcallBench.java,UpcallCost.java,LoadCost.java,OneShot.java,JavaBaseline.java}`
