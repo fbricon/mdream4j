@@ -98,14 +98,14 @@ cargo build --release --manifest-path tools/reference/Cargo.toml
 ./mvnw -Pwith-reference verify
 ```
 
-See [`docs/REFERENCE.md`](docs/REFERENCE.md) for the corpus and bridge details, and
-[`docs/RELEASING.md`](docs/RELEASING.md) for cutting a release.
+See [`docs/REFERENCE.md`](docs/REFERENCE.md) for the corpus and bridge details.
 
 ## Benchmarks
 
 [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) compares mdream4j with the Rust reference, flexmark,
 remark, copy_down, jsoup and xberg on real pages and synthetic worst cases. On real pages
-mdream4j is 3–7× faster than the JVM contenders and within 0.4–1.4× of the Rust reference.
+mdream4j is 3.6–6.6× faster than flexmark and remark, 1.6–2.7× faster than jsoup, and
+within 0.46–1.4× of the Rust reference.
 
 ## Consumers
 

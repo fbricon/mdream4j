@@ -153,8 +153,7 @@
     </profile>
     <!--
       Publishing only. Signs the artifacts, attaches the javadoc jar and uploads the reactor to
-      the Sonatype Central Portal. Requires a `central` server entry in ~/.m2/settings.xml and a
-      signing key; see docs/RELEASING.md. Never active in a normal build.
+      the Sonatype Central Portal. Never active in a normal build.
     -->
     <profile>
       <id>release</id>
