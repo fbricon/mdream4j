@@ -193,7 +193,29 @@ final class ConvertState {
   int emptyItemLineStart;
   int emptyItemLen;
   boolean emptyItemAfterCr;
+  /**
+   * A drain found content on the marker's line, so nothing will be inserted there and the line may
+   * be freed; the guard itself stays armed.
+   */
+  boolean emptyItemAnswered;
   boolean listRulePending;
+  /**
+   * A heading closed in a list item. Inside the item its block spacing is collapsed, so the next
+   * visible content owes it the block break the root writes, or that content joins the heading's
+   * line.
+   */
+  boolean headingBreakPending;
+
+  /**
+   * The space run ending the line a dropped caption hands its heading break back to, with the
+   * start of that run and whether the line opens a block. Empty captions in a row check the same
+   * line, so it is read once rather than at every exit.
+   */
+  int captionLineSpacesEnd = -1;
+  int captionLineSpacesStart;
+  int captionLineOpensStart = -1;
+  boolean captionLineOpens;
+
   int hardBreakEnd = -1;
   int captionBoundary;
   int captionBoundaryNewLines;
@@ -245,6 +267,8 @@ final class ConvertState {
   static final int TEXT_RUN_FLUSH_THRESHOLD = 64 * 1024;
   /** How much a run grows between scans for a usable word boundary. */
   static final int TEXT_RUN_SPLIT_SCAN = 64;
+  /** GFM has no {@code colspan}; a wider cell is capped to this many columns. */
+  static final int MAX_CELL_SPAN = 64;
 
   static final int NO_OVERRIDE = 255;
 
@@ -676,6 +700,8 @@ final class ConvertState {
     boolean open;
     int beginDepth;
     boolean startsAtHardBreak;
+    /** Bytes before the link bracket owned by a pending heading break. */
+    int headingBreakPrefixLen;
 
     void reset() {
       bracketPos = 0;
@@ -690,6 +716,7 @@ final class ConvertState {
       open = false;
       beginDepth = 0;
       startsAtHardBreak = false;
+      headingBreakPrefixLen = 0;
     }
 
     void copyFrom(LinkOutputState other) {
@@ -705,6 +732,7 @@ final class ConvertState {
       open = other.open;
       beginDepth = other.beginDepth;
       startsAtHardBreak = other.startsAtHardBreak;
+      headingBreakPrefixLen = other.headingBreakPrefixLen;
     }
   }
 
@@ -713,6 +741,7 @@ final class ConvertState {
     int contentStart;
     int kind;
     boolean startsAtHardBreak;
+    boolean restoresHeadingBreak;
   }
 
   static final class CodeSpanState {
@@ -759,12 +788,21 @@ final class ConvertState {
   static final int CAPTION_BOUNDARY_NONE = 0;
   static final int CAPTION_BOUNDARY_PENDING = 1;
   static final int CAPTION_BOUNDARY_CONSUME_SPACE = 2;
+  static final int CAPTION_BOUNDARY_QUOTE_PARENT = 3;
+  static final int CAPTION_BOUNDARY_QUOTE_TENTATIVE = 4;
+  /** {@code CAPTION_BOUNDARY_QUOTE_TENTATIVE} past a closing delimiter. */
+  static final int QUOTE_CLOSED = Integer.MAX_VALUE;
 
   static final class CaptionFrame {
     int state = CAPTION_PENDING;
     int[] spacing = {0, 0};
     DeferredBreakRun deferredBreaks;
     boolean hasInternalBreak;
+    /**
+     * The caption took a pending heading break at its enter. Dropped empty, it writes no separation
+     * of its own, so its exit owes the break again.
+     */
+    boolean restoresHeadingBreak;
 
     int tentativeOutputStart;
     int tentativeContentStart;

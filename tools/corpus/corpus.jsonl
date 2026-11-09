@@ -626,86 +626,91 @@
 {"id":"rust-conv-395","html":"<h2>Ends with ###</h2>","options":{}}
 {"id":"rust-conv-396","html":"<h2>C#</h2>","options":{}}
 {"id":"rust-conv-397","html":"<h2>plain</h2>","options":{}}
-{"id":"rust-conv-398","html":"<table><tr><th>h</th></tr><tr><td><h3>Ends with #</h3></td></tr></table>","options":{}}
-{"id":"rust-conv-400","html":"<ol start=\"3\"><li>a</li><li>b</li></ol>","options":{}}
-{"id":"rust-conv-401","html":"<ol><li>a</li></ol>","options":{}}
-{"id":"rust-conv-402","html":"<ol start=\"9\"><li><p>a</p><p>b</p></li></ol>","options":{}}
-{"id":"rust-conv-403","html":"<ol start=\"0\"><li>a</li><li>b</li></ol>","options":{}}
-{"id":"rust-conv-404","html":"<ol start=\" 7 \"><li>a</li></ol>","options":{}}
-{"id":"rust-conv-405","html":"<ol start=\"+7\"><li>a</li></ol>","options":{}}
-{"id":"rust-conv-406","html":"<ol start=\"5\"><li>a<ol start=\"20\"><li>b</li></ol></li><li>c<ul><li>d</li></ul></li><li>e</li></ol><ol><li>f</li></ol>","options":{}}
-{"id":"rust-conv-407","html":"<ol><script>s</script><li>y</li></ol>","options":{}}
-{"id":"rust-conv-408","html":"<ol start=\"3\"><li>a</li><template>t</template><li>b</li></ol>","options":{}}
-{"id":"rust-conv-409","html":"<ol start=\"999999999\"><li>a</li></ol>","options":{}}
-{"id":"rust-conv-410","html":"<ol start=\"1000000000\"><li>a</li></ol>","options":{}}
-{"id":"rust-conv-411","html":"<ol start=\"99999999999\"><li>a</li></ol>","options":{}}
-{"id":"rust-conv-412","html":"<ol start=\"-5\"><li>a</li></ol>","options":{}}
-{"id":"rust-conv-413","html":"<ol start=\"\"><li>a</li></ol>","options":{}}
-{"id":"rust-conv-414","html":"<ol start=\"999999998\"><li>a</li><li>b</li><li>c</li></ol>","options":{}}
-{"id":"rust-conv-415","html":"<table><tr><td colspan=\"2\">wide</td></tr><tr><td>a</td><td>b</td></tr></table>","options":{}}
-{"id":"rust-conv-416","html":"<table><tr><th colspan=\"3\">h</th></tr><tr><td>a</td><td>b</td><td>c</td></tr></table>","options":{}}
-{"id":"rust-conv-417","html":"<table><tr><td colspan=\"+2\">wide</td></tr></table>","options":{}}
-{"id":"rust-conv-418","html":"<table><tr><td colspan=\"256\">wide</td></tr></table>","options":{}}
-{"id":"rust-conv-419","html":"<p>a</p><!--><p>b</p>","options":{}}
-{"id":"rust-conv-420","html":"<!-->after","options":{}}
-{"id":"rust-conv-421","html":"before<!-->","options":{}}
-{"id":"rust-conv-422","html":"before<!--[if IE]>hidden<![endif]-->after","options":{}}
-{"id":"rust-conv-424","html":"before<!--->after","options":{}}
-{"id":"rust-conv-425","html":"before<!--x--!>after","options":{}}
-{"id":"rust-conv-426","html":"before<!----!>after","options":{}}
-{"id":"rust-conv-427","html":"before<!--x---!>after","options":{}}
-{"id":"rust-conv-428","html":"<table><tr><th>h</th><th>i</th></tr><tr><td>a</td><td>b</td><td>c</td></tr></table>","options":{}}
-{"id":"rust-conv-429","html":"<ul><li><table><tr><th>h</th></tr><tr><td>c</td></tr></table></li></ul>","options":{}}
-{"id":"rust-conv-430","html":"<ul><li><p>intro</p><table><tr><th>h</th></tr><tr><td>c</td></tr></table></li></ul>","options":{}}
-{"id":"rust-conv-431","html":"<table><caption>Cap</caption><tr><th>h</th></tr><tr><td>c</td></tr></table>","options":{}}
-{"id":"rust-conv-432","html":"<ul><li><p>Intro:</p><table><caption>Cap</caption><tr><th>h</th></tr><tr><td>c</td></tr></table></li></ul>","options":{}}
-{"id":"rust-conv-433","html":"<ul><li>x<br>y<table><caption>Cap</caption><tr><th>h</th></tr></table></li></ul>","options":{}}
-{"id":"rust-conv-434","html":"<table><tr><th>h</th></tr><tr><td><h3>H</h3></td></tr></table>","options":{}}
-{"id":"rust-conv-435","html":"<pre>a <em>b</em> <strong>c</strong>\n</pre>","options":{}}
-{"id":"rust-conv-436","html":"<pre>a <a href=\"/x\">l</a>\n</pre>","options":{}}
-{"id":"rust-conv-437","html":"<p>a <em>b</em> <a href=\"/x\">l</a></p>","options":{}}
-{"id":"rust-conv-438","html":"<table><tr><th>h</th></tr><tr><td><code>a|b</code></td></tr></table>","options":{}}
-{"id":"rust-conv-439","html":"<p><code>a|b</code></p>","options":{}}
-{"id":"rust-conv-440","html":"<details><summary>S</summary><p>* text</p></details>","options":{}}
-{"id":"rust-conv-441","html":"<dl><dt><code>A_B</code></dt><dd><p>one</p></dd><dt><code>C_D</code></dt><dd><p>two</p></dd></dl>","options":{}}
-{"id":"rust-conv-442","html":"<table><thead><tr><th>V<th>C<tbody><tr><td>a<td><p>x<tr><td>b<td><p>y</table>","options":{}}
-{"id":"rust-conv-443","html":"<pre><code>compopt</code> [-o option]</pre><p>after</p>","options":{}}
-{"id":"rust-conv-444","html":"<pre><code>a</code><code>b</code></pre>","options":{}}
-{"id":"rust-conv-445","html":"<ul><li><pre>code\n</pre><p>after</p></li></ul>","options":{}}
-{"id":"rust-conv-446","html":"<ul><li><pre><code>a\nb</code></pre></li></ul>","options":{}}
-{"id":"rust-conv-447","html":"<ul><li>a<ul><li><pre><code>x</code></pre></li></ul></li></ul>","options":{}}
-{"id":"rust-conv-448","html":"<ul><li>text<pre><code>x</code></pre></li></ul>","options":{}}
-{"id":"rust-conv-449","html":"x x<h4><style>","options":{}}
-{"id":"rust-conv-450","html":"x x<h4><style></style></h4>","options":{}}
-{"id":"rust-conv-451","html":"x x<h1><script>","options":{}}
-{"id":"rust-conv-452","html":"x x<h6><style>y</style>","options":{}}
-{"id":"rust-conv-456","html":"[<li><bR>�<code><TD><li>","options":{}}
-{"id":"rust-conv-457","html":"<li><br>é<code>x</code>","options":{}}
-{"id":"rust-conv-458","html":"<ul><li><li><code>a</code></ul>","options":{}}
-{"id":"rust-conv-459","html":"<li><br><code><pre>a</pre></code>","options":{}}
-{"id":"rust-conv-460","html":"<pre><li><pre><li><blockquote>><br>0\n�<code>","options":{}}
-{"id":"rust-conv-461","html":"<blockquote>a <code>b</code> c</blockquote>","options":{}}
-{"id":"rust-conv-462","html":"<blockquote><pre><code>x</code></pre></blockquote>","options":{}}
-{"id":"rust-conv-463","html":"<blockquote>é <code>`b`</code></blockquote>","options":{}}
-{"id":"rust-conv-464","html":"<blockquote><li><pre><code>�</code></pre></blockquote>","options":{}}
-{"id":"rust-conv-467","html":"<textarea>a</textarea/","options":{}}
-{"id":"rust-conv-468","html":"<script>a</","options":{}}
-{"id":"rust-conv-469","html":"<style>a</","options":{}}
-{"id":"rust-conv-470","html":"<iframe>a</","options":{}}
-{"id":"rust-conv-471","html":"<noscript>a</","options":{}}
-{"id":"rust-conv-472","html":"<p>a</","options":{}}
-{"id":"rust-conv-473","html":"<p>a<","options":{}}
-{"id":"rust-conv-474","html":"<p>a</p","options":{}}
-{"id":"rust-conv-475","html":"<div>a<di","options":{}}
-{"id":"rust-conv-476","html":"<dd><h2><li><blockquote>a<p><code><p>>aa<<a><<li>`","options":{}}
-{"id":"rust-conv-477","html":"<script><b>x</b></script>","options":{}}
-{"id":"rust-conv-478","html":"<p>é*東京_🙂&amp;x</p>","options":{}}
-{"id":"rust-conv-479","html":"<pre><code>é*東京_🙂&amp;x\n\t  y</code></pre>","options":{}}
-{"id":"rust-conv-480","html":"</blockquote>A & B<br></a><table><tr><td><a href='../x?utm_source=a&amp;名=值&amp;#章'><code><blockquote>&amp;copy; &nLt; &#x80;&bogus;</li></ul><table><tr><td><code></td></tr></table></li></ul><div class=hidden></pre></div></pre></pre>","options":{"origin":"https://example.com/docs/page"}}
-{"id":"rust-conv-481","html":"<p>aaaaaaaaaa --</p>","options":{"wrapWidth":10}}
-{"id":"rust-conv-482","html":"<ul><li>alpha beta gamma delta<ol start=\"10\"><li>one two three four five</li></ol></li></ul>","options":{"wrapWidth":12}}
-{"id":"rust-conv-483","html":"<ul><li>x<ul><li><blockquote><br></blockquote></li></ul><p>y</p></li></ul>","options":{}}
-{"id":"rust-conv-485","html":"<ul><li>a<ul><li></li></ul># t</li></ul>","options":{}}
+{"id":"rust-conv-398","html":"<ul><li><h3>#</h3><p>b</p></li></ul>","options":{}}
+{"id":"rust-conv-399","html":"<ul><li><pre>x</pre><h3>#</h3></li></ul>","options":{}}
+{"id":"rust-conv-400","html":"<table><tr><th>h</th></tr><tr><td><h3>Ends with #</h3></td></tr></table>","options":{}}
+{"id":"rust-conv-402","html":"<ol start=\"3\"><li>a</li><li>b</li></ol>","options":{}}
+{"id":"rust-conv-403","html":"<ol><li>a</li></ol>","options":{}}
+{"id":"rust-conv-404","html":"<ol start=\"9\"><li><p>a</p><p>b</p></li></ol>","options":{}}
+{"id":"rust-conv-405","html":"<ol start=\"0\"><li>a</li><li>b</li></ol>","options":{}}
+{"id":"rust-conv-406","html":"<ol start=\" 7 \"><li>a</li></ol>","options":{}}
+{"id":"rust-conv-407","html":"<ol start=\"+7\"><li>a</li></ol>","options":{}}
+{"id":"rust-conv-408","html":"<ol start=\"5\"><li>a<ol start=\"20\"><li>b</li></ol></li><li>c<ul><li>d</li></ul></li><li>e</li></ol><ol><li>f</li></ol>","options":{}}
+{"id":"rust-conv-409","html":"<ol><script>s</script><li>y</li></ol>","options":{}}
+{"id":"rust-conv-410","html":"<ol start=\"3\"><li>a</li><template>t</template><li>b</li></ol>","options":{}}
+{"id":"rust-conv-411","html":"<ol start=\"999999999\"><li>a</li></ol>","options":{}}
+{"id":"rust-conv-412","html":"<ol start=\"1000000000\"><li>a</li></ol>","options":{}}
+{"id":"rust-conv-413","html":"<ol start=\"99999999999\"><li>a</li></ol>","options":{}}
+{"id":"rust-conv-414","html":"<ol start=\"-5\"><li>a</li></ol>","options":{}}
+{"id":"rust-conv-415","html":"<ol start=\"\"><li>a</li></ol>","options":{}}
+{"id":"rust-conv-416","html":"<ol start=\"999999998\"><li>a</li><li>b</li><li>c</li></ol>","options":{}}
+{"id":"rust-conv-417","html":"<table><tr><td colspan=\"2\">wide</td></tr><tr><td>a</td><td>b</td></tr></table>","options":{}}
+{"id":"rust-conv-418","html":"<table><tr><th colspan=\"3\">h</th></tr><tr><td>a</td><td>b</td><td>c</td></tr></table>","options":{}}
+{"id":"rust-conv-419","html":"<table><tr><td colspan=\"+2\">wide</td></tr></table>","options":{}}
+{"id":"rust-conv-420","html":"<table><tr><td colspan=\"256\">wide</td></tr></table>","options":{}}
+{"id":"rust-conv-421","html":"<p>a</p><!--><p>b</p>","options":{}}
+{"id":"rust-conv-422","html":"<!-->after","options":{}}
+{"id":"rust-conv-423","html":"before<!-->","options":{}}
+{"id":"rust-conv-424","html":"before<!--[if IE]>hidden<![endif]-->after","options":{}}
+{"id":"rust-conv-426","html":"before<!--->after","options":{}}
+{"id":"rust-conv-427","html":"before<!--x--!>after","options":{}}
+{"id":"rust-conv-428","html":"before<!----!>after","options":{}}
+{"id":"rust-conv-429","html":"before<!--x---!>after","options":{}}
+{"id":"rust-conv-430","html":"<table><tr><th>h</th><th>i</th></tr><tr><td>a</td><td>b</td><td>c</td></tr></table>","options":{}}
+{"id":"rust-conv-431","html":"<ul><li><table><tr><th>h</th></tr><tr><td>c</td></tr></table></li></ul>","options":{}}
+{"id":"rust-conv-432","html":"<ul><li><p>intro</p><table><tr><th>h</th></tr><tr><td>c</td></tr></table></li></ul>","options":{}}
+{"id":"rust-conv-433","html":"<table><caption>Cap</caption><tr><th>h</th></tr><tr><td>c</td></tr></table>","options":{}}
+{"id":"rust-conv-434","html":"<ul><li><p>Intro:</p><table><caption>Cap</caption><tr><th>h</th></tr><tr><td>c</td></tr></table></li></ul>","options":{}}
+{"id":"rust-conv-435","html":"<ul><li>x<br>y<table><caption>Cap</caption><tr><th>h</th></tr></table></li></ul>","options":{}}
+{"id":"rust-conv-436","html":"<table><tr><th>h</th></tr><tr><td><h3>H</h3></td></tr></table>","options":{}}
+{"id":"rust-conv-437","html":"<pre>a <em>b</em> <strong>c</strong>\n</pre>","options":{}}
+{"id":"rust-conv-438","html":"<pre>a <a href=\"/x\">l</a>\n</pre>","options":{}}
+{"id":"rust-conv-439","html":"<p>a <em>b</em> <a href=\"/x\">l</a></p>","options":{}}
+{"id":"rust-conv-440","html":"<table><tr><th>h</th></tr><tr><td><code>a|b</code></td></tr></table>","options":{}}
+{"id":"rust-conv-441","html":"<p><code>a|b</code></p>","options":{}}
+{"id":"rust-conv-442","html":"<details><summary>S</summary><p>* text</p></details>","options":{}}
+{"id":"rust-conv-443","html":"<dl><dt><code>A_B</code></dt><dd><p>one</p></dd><dt><code>C_D</code></dt><dd><p>two</p></dd></dl>","options":{}}
+{"id":"rust-conv-444","html":"<dt><ul><dd><h6>a b<dd>*c","options":{}}
+{"id":"rust-conv-445","html":"<dt><ul><dd><h6>a ><dd>`c","options":{}}
+{"id":"rust-conv-446","html":"<dl><ul>><code><blockquote></code>`","options":{}}
+{"id":"rust-conv-447","html":"<table><thead><tr><th>V<th>C<tbody><tr><td>a<td><p>x<tr><td>b<td><p>y</table>","options":{}}
+{"id":"rust-conv-448","html":"<pre><code>compopt</code> [-o option]</pre><p>after</p>","options":{}}
+{"id":"rust-conv-449","html":"<pre><code>a</code><code>b</code></pre>","options":{}}
+{"id":"rust-conv-450","html":"<ul><li><pre>code\n</pre><p>after</p></li></ul>","options":{}}
+{"id":"rust-conv-451","html":"<ul><li><pre><code>a\nb</code></pre></li></ul>","options":{}}
+{"id":"rust-conv-452","html":"<ul><li>a<ul><li><pre><code>x</code></pre></li></ul></li></ul>","options":{}}
+{"id":"rust-conv-453","html":"<ul><li>text<pre><code>x</code></pre></li></ul>","options":{}}
+{"id":"rust-conv-454","html":"x x<h4><style>","options":{}}
+{"id":"rust-conv-455","html":"x x<h4><style></style></h4>","options":{}}
+{"id":"rust-conv-456","html":"x x<h1><script>","options":{}}
+{"id":"rust-conv-457","html":"x x<h6><style>y</style>","options":{}}
+{"id":"rust-conv-461","html":"[<li><bR>�<code><TD><li>","options":{}}
+{"id":"rust-conv-462","html":"<li><br>é<code>x</code>","options":{}}
+{"id":"rust-conv-463","html":"<ul><li><li><code>a</code></ul>","options":{}}
+{"id":"rust-conv-464","html":"<li><br><code><pre>a</pre></code>","options":{}}
+{"id":"rust-conv-465","html":"<pre><li><pre><li><blockquote>><br>0\n�<code>","options":{}}
+{"id":"rust-conv-466","html":"<blockquote>a <code>b</code> c</blockquote>","options":{}}
+{"id":"rust-conv-467","html":"<blockquote><pre><code>x</code></pre></blockquote>","options":{}}
+{"id":"rust-conv-468","html":"<blockquote>é <code>`b`</code></blockquote>","options":{}}
+{"id":"rust-conv-469","html":"<blockquote><li><pre><code>�</code></pre></blockquote>","options":{}}
+{"id":"rust-conv-472","html":"<textarea>a</textarea/","options":{}}
+{"id":"rust-conv-473","html":"<script>a</","options":{}}
+{"id":"rust-conv-474","html":"<style>a</","options":{}}
+{"id":"rust-conv-475","html":"<iframe>a</","options":{}}
+{"id":"rust-conv-476","html":"<noscript>a</","options":{}}
+{"id":"rust-conv-477","html":"<p>a</","options":{}}
+{"id":"rust-conv-478","html":"<p>a<","options":{}}
+{"id":"rust-conv-479","html":"<p>a</p","options":{}}
+{"id":"rust-conv-480","html":"<div>a<di","options":{}}
+{"id":"rust-conv-481","html":"<dd><h2><li><blockquote>a<p><code><p>>aa<<a><<li>`","options":{}}
+{"id":"rust-conv-482","html":"<script><b>x</b></script>","options":{}}
+{"id":"rust-conv-483","html":"<p>é*東京_🙂&amp;x</p>","options":{}}
+{"id":"rust-conv-484","html":"<pre><code>é*東京_🙂&amp;x\n\t  y</code></pre>","options":{}}
+{"id":"rust-conv-485","html":"</blockquote>A & B<br></a><table><tr><td><a href='../x?utm_source=a&amp;名=值&amp;#章'><code><blockquote>&amp;copy; &nLt; &#x80;&bogus;</li></ul><table><tr><td><code></td></tr></table></li></ul><div class=hidden></pre></div></pre></pre>","options":{"origin":"https://example.com/docs/page"}}
+{"id":"rust-conv-486","html":"<p>aaaaaaaaaa --</p>","options":{"wrapWidth":10}}
+{"id":"rust-conv-487","html":"<ul><li>alpha beta gamma delta<ol start=\"10\"><li>one two three four five</li></ol></li></ul>","options":{"wrapWidth":12}}
+{"id":"rust-conv-488","html":"<ul><li>x<ul><li><blockquote><br></blockquote></li></ul><p>y</p></li></ul>","options":{}}
+{"id":"rust-conv-490","html":"<ul><li>a<ul><li></li></ul># t</li></ul>","options":{}}
 {"id":"rust-implied-001","html":"<p>one<p>two","options":{}}
 {"id":"rust-implied-002","html":"<p>a<p>b<p>c","options":{}}
 {"id":"rust-implied-003","html":"<p>one<div>two</div>","options":{}}
@@ -834,144 +839,167 @@
 {"id":"rust-stream-016","html":"<ul><li>p<pre><p>x</p></pre></li></ul>","options":{}}
 {"id":"rust-stream-017","html":"<ul><li>p<pre><caption>x</caption></pre></li></ul>","options":{}}
 {"id":"rust-stream-018","html":"<ul><li><a href=\"/w\" title=\"W\"><pre><p>x</p></pre></a></li></ul>","options":{}}
-{"id":"rust-stream-037","html":"<b>1) x<small><br> <ul><li>&#9;<br></li></ul></small>===<hr></b>","options":{}}
-{"id":"rust-stream-038","html":"<p>café 😀</p>","options":{}}
-{"id":"rust-stream-039","html":"a<br><em></em><br>x","options":{}}
-{"id":"rust-stream-040","html":"<ul><li>a<br><span></span><br>x</li></ul>","options":{}}
-{"id":"rust-stream-041","html":"<p>a<br><br></p>x","options":{}}
-{"id":"rust-stream-042","html":"<ul><li>a<br><br></li><li>x</li></ul>","options":{}}
-{"id":"rust-stream-043","html":"<ul><li>x<br><br> </li><li>y</li></ul>","options":{}}
-{"id":"rust-stream-044","html":"<ul><li>a<ul><li><br><br>x</li></ul></li></ul>","options":{}}
-{"id":"rust-stream-045","html":"<p>first<br>second</p>","options":{}}
-{"id":"rust-stream-046","html":"<p>before\\<br>after<br><br>last</p>","options":{}}
-{"id":"rust-stream-049","html":"<table><tr><td>first<br>second</td></tr></table>","options":{}}
-{"id":"rust-stream-053","html":"<blockquote><p>intro</p><ul><li>one</li><li>two</li></ul></blockquote>","options":{}}
-{"id":"rust-stream-054","html":"<blockquote>lead<table><tr><td>a</td></tr></table>tail</blockquote>","options":{}}
-{"id":"rust-stream-055","html":"<blockquote><ul><li>one<ul><li>sub</li></ul></li></ul></blockquote>","options":{}}
-{"id":"rust-stream-056","html":"<ul><li><blockquote><ul><li>x</li><li>y</li></ul></blockquote></li></ul>","options":{}}
-{"id":"rust-stream-057","html":"<pre><code>const x = `hi ${y}`;</code></pre>","options":{}}
-{"id":"rust-stream-058","html":"<p>use <code>a`b</code> here</p>","options":{}}
-{"id":"rust-stream-059","html":"<table><tr><td>a`b</td><td>c\\d</td></tr></table>","options":{}}
-{"id":"rust-stream-060","html":"<p>text with <a href=\"/x\">a [bracket] link</a> end</p>","options":{}}
-{"id":"rust-stream-061","html":"<p>&#35; heading [label](url) and *bar* ~~baz~~ `qux` &amp;copy;</p><p>> quote</p><p>1. item</p><p>---</p>","options":{}}
-{"id":"rust-stream-062","html":"<ol start=\"10\"><li>> quote</li><li>after</li></ol>","options":{}}
-{"id":"rust-stream-066","html":"<a href=\"\">text</a>","options":{}}
-{"id":"rust-stream-067","html":"<a href=\"docs/a b\">text</a>","options":{}}
-{"id":"rust-stream-068","html":"<a href=\"docs/(a)\\file\">text</a>","options":{}}
-{"id":"rust-stream-069","html":"<a href=\"/x\" title=\"say &quot;hi&quot; \\ path\">text</a>","options":{}}
-{"id":"rust-stream-070","html":"<img src=\"/x.png\" alt=\"a ] \\ *bold* _em_ &#96;code&#96;\">","options":{}}
-{"id":"rust-stream-071","html":"<img src=\"/x.png\" alt=\"alt\" title=\"say &quot;hi&quot; \\ path\">","options":{}}
-{"id":"rust-stream-072","html":"<a href=\"/edit\" title=\"Edit\"><img src=\"/edit.svg\" alt=\"Edit\"></a>","options":{}}
-{"id":"rust-stream-073","html":"<a href=\"/x\" aria-label=\"Open\"><img src=\"/i\" alt=\"Alt\"></a>","options":{}}
-{"id":"rust-stream-074","html":"<a href=\"/x\" title=\"Title\"><span><span><img src=\"/i\" alt=\"Alt\"></span></span></a>","options":{}}
-{"id":"rust-stream-075","html":"<div><a href=\"/x\"><span><img src=\"/i\" alt=\"Alt\"> </span></a>Caption</div>","options":{}}
-{"id":"rust-stream-076","html":"<div><a href=\"/x\"><x-wrap><img src=\"/i\" alt=\"A\"></x-wrap></a> Caption</div>","options":{}}
-{"id":"rust-stream-077","html":"<p>before <code>a `b` c</code> after</p>","options":{}}
-{"id":"rust-stream-079","html":"<ol><li>one<pre><code>cmd</code></pre></li><li>two</li></ol>","options":{}}
-{"id":"rust-stream-080","html":"<ul><li>one<pre><code>cmd</code></pre></li><li>two</li></ul>","options":{}}
-{"id":"rust-stream-081","html":"<ol><li>one<pre><code>a</code></pre></li><li>two</li><li>three</li></ol>","options":{}}
-{"id":"rust-stream-082","html":"<summary>text <svg></svg></summary>","options":{}}
-{"id":"rust-stream-083","html":"<details><summary>text <svg><polyline points=\"1 2\"></polyline></svg></summary><p>b</p></details>","options":{}}
-{"id":"rust-stream-084","html":"<p>before</p><script>var x = 1; if (a < b) { y(); }</script><p>after</p>","options":{}}
-{"id":"rust-stream-085","html":"<script>a()</script><script>b()</script><p>ok</p>","options":{}}
-{"id":"rust-stream-086","html":"<p>x</p><script>let s = \"</scr\" + \"ipt>end\";</script><p>y</p>","options":{}}
-{"id":"rust-stream-087","html":"<p>one</p><script>\n  line1\n  line2\n</script><p>two</p>","options":{}}
-{"id":"rust-stream-088","html":"<pre class=language-rs><pre class=language-js></pre>y</pre>","options":{}}
-{"id":"rust-stream-089","html":"<pre><code>x</code><pre></pre>y</pre>","options":{}}
-{"id":"rust-stream-090","html":"<pre><code>x</code><pre>inner</pre>y</pre>","options":{}}
-{"id":"rust-stream-091","html":"<pre><pre></pre>y</pre>","options":{}}
-{"id":"rust-stream-092","html":"<pre><pre>inner</pre>y</pre>","options":{}}
-{"id":"rust-stream-093","html":"<pre><pre><code>x</code></pre>y</pre>","options":{}}
-{"id":"rust-stream-095","html":"<h3><em>","options":{}}
-{"id":"rust-stream-102","html":"<p>the quick brown fox jumps over the lazy dog and keeps running onwards</p>","options":{}}
-{"id":"rust-stream-103","html":"<p>double  spaces   and\ttabs\nand newlines spread across a longer run</p>","options":{}}
-{"id":"rust-stream-104","html":"<p>entity &amp; heavy &lt;text&gt; run that continues past a boundary</p>","options":{}}
-{"id":"rust-stream-105","html":"<p>trailing whitespace sensitive run ending in a space <em>x</em></p>","options":{}}
-{"id":"rust-stream-106","html":"<pre>preformatted  run   keeping    spacing across a chunk boundary</pre>","options":{}}
-{"id":"rust-stream-107","html":"<p>one two three four</p>","options":{}}
-{"id":"rust-stream-108","html":"<p>a  b</p>","options":{}}
-{"id":"rust-stream-109","html":"<p>a   b   c</p>","options":{}}
-{"id":"rust-stream-110","html":"<p> leading and trailing </p>","options":{}}
-{"id":"rust-stream-111","html":"<p>a <b>bold word</b> c</p>","options":{}}
-{"id":"rust-stream-112","html":"<p>one two<span> three four</span>five six</p>","options":{}}
-{"id":"rust-stream-113","html":"<p>a\tb c\nd  e</p>","options":{}}
-{"id":"rust-stream-114","html":"<p>plain a &amp; b more words</p>","options":{}}
-{"id":"rust-stream-115","html":"<p>hazard a *b* c words</p>","options":{}}
-{"id":"rust-stream-116","html":"<p>word café word ok</p>","options":{}}
-{"id":"rust-stream-117","html":"<pre>keep  double   spaces</pre>","options":{}}
-{"id":"rust-stream-118","html":"<p>trailing space before tag <em>x</em></p>","options":{}}
-{"id":"rust-stream-119","html":"<h2>foo #</h2>","options":{}}
-{"id":"rust-stream-120","html":"<h2>foo ##</h2>","options":{}}
-{"id":"rust-stream-121","html":"<h3>foo ##</h3>","options":{}}
-{"id":"rust-stream-122","html":"<h1>#</h1>","options":{}}
-{"id":"rust-stream-123","html":"<h2>foo # bar</h2>","options":{}}
-{"id":"rust-stream-124","html":"<h2>foo <em>b</em> #</h2>","options":{}}
-{"id":"rust-stream-125","html":"<h2>foo #</h2><p>after</p>","options":{}}
-{"id":"rust-stream-126","html":"<h2>a</h2><h2>b #</h2>","options":{}}
-{"id":"rust-stream-136","html":"<ul><li>a<ol><li></li></ol></li></ul>","options":{}}
-{"id":"rust-stream-138","html":"<ul><li>a<ul><li></li><li>b</li></ul></li></ul>","options":{}}
-{"id":"rust-stream-147","html":"<li><li><i></li>","options":{}}
-{"id":"rust-stream-149","html":"<li><li><em></li>","options":{}}
-{"id":"rust-stream-150","html":"<ul><li><li><i></li></ul>","options":{}}
-{"id":"rust-stream-155","html":"<dd><p>.<br />*<Foo/Bar>","options":{}}
-{"id":"rust-stream-156","html":"<dd><tr><a href=\"u\" title=\"t\">_</html>","options":{}}
-{"id":"rust-stream-159","html":"<dd>*<blockquote><blockquote>_","options":{}}
-{"id":"rust-stream-161","html":"<dd><ol><i><ol>_","options":{}}
-{"id":"rust-stream-163","html":"<table><caption>c</caption>.","options":{}}
-{"id":"rust-stream-164","html":"<table><p>x</p>.","options":{}}
-{"id":"rust-stream-165","html":"<table><caption>c</caption><tr>","options":{}}
-{"id":"rust-stream-166","html":"<td>d</td><table><tr>","options":{}}
-{"id":"rust-stream-167","html":"<table><p>x</p><dd>","options":{}}
-{"id":"rust-stream-173","html":"<ul><li>.<br />\n<table><caption>c</caption><tr><td>d</td></tr></table>","options":{}}
-{"id":"rust-stream-174","html":"<ol><li>.<br />\n<table><caption>c</caption><tr><td>d</td></tr></table>","options":{}}
-{"id":"rust-stream-175","html":"<i><ul><li>.<br />\n<table><caption>c</caption><tr><td>d</td></tr></table>","options":{}}
-{"id":"rust-stream-176","html":"<ul><li>t<ul><li>.<br />\n<table><caption>c</caption><tr><td>d</td></tr></table>","options":{}}
-{"id":"rust-stream-181","html":"<li><li><br /><i>","options":{}}
-{"id":"rust-stream-182","html":"<li><li><br /><em>","options":{}}
-{"id":"rust-stream-183","html":"<ul><li><ul><li><br /><i>","options":{}}
-{"id":"rust-stream-184","html":"<tr><li><br /><i>","options":{}}
-{"id":"rust-stream-185","html":".<li><br /><i>","options":{}}
-{"id":"rust-stream-186","html":"<ul><li><blockquote><ul><li>","options":{}}
-{"id":"rust-stream-193","html":"<i><blockquote>","options":{}}
-{"id":"rust-stream-194","html":"<i>><blockquote>","options":{}}
-{"id":"rust-stream-195","html":"<em>-<blockquote>","options":{}}
-{"id":"rust-stream-196","html":"<table><dt><blockquote>","options":{}}
-{"id":"rust-stream-197","html":"<tr><a href=\"u\"><blockquote>","options":{}}
-{"id":"rust-stream-203","html":"<li><li><br /><ul><li>","options":{}}
-{"id":"rust-stream-204","html":"<ul><li><ul><li><br /><ul><li>","options":{}}
-{"id":"rust-stream-205","html":"<tr><li><br /><ul><li>","options":{}}
-{"id":"rust-stream-206","html":"<td>d</td><li><br /><ul><li>","options":{}}
-{"id":"rust-stream-211","html":"$&#9","options":{}}
-{"id":"rust-stream-212","html":"$&#9;","options":{}}
-{"id":"rust-stream-213","html":"a&#9;&#9;","options":{}}
-{"id":"rust-stream-214","html":"x&Tab;","options":{}}
-{"id":"rust-stream-229","html":"<lI><dd/L><oL><lI><oL><I><hr><dd/L>%%&<lI><<o>[","options":{}}
-{"id":"rust-stream-233","html":"a a<li><p><code>","options":{}}
-{"id":"rust-stream-234","html":"a a<li><html><strong>","options":{}}
-{"id":"rust-stream-235","html":"<p href=\"\">text</p>","options":{}}
-{"id":"rust-stream-236","html":"<p class=\"v\">text</p>","options":{}}
-{"id":"rust-stream-237","html":"<p data-x='v'>text</p>","options":{}}
-{"id":"rust-stream-238","html":"<p data-x=\"a>b\">text</p>","options":{}}
-{"id":"rust-stream-239","html":"<a href=\"x\"><ul><li></li></ul></a>","options":{}}
-{"id":"rust-stream-240","html":"<ul><li><a href=\"x\"><ul><li></li></ul></a><ul><li># h</li></ul></li></ul>","options":{}}
-{"id":"rust-stream-241","html":"<a href=\"x\"><ul><li></li><li></li></ul></a>","options":{}}
-{"id":"rust-stream-242","html":"<a href=\"x\"><ol start=\"10\"><li></li></ol></a>","options":{}}
-{"id":"rust-stream-243","html":"<a href=\"x\"><ul><li><ul><li></li></ul></li></ul></a>","options":{}}
-{"id":"rust-stream-244","html":"<a href=\"x\"><ul><li>one</li><li>two</li></ul></a>","options":{}}
-{"id":"rust-stream-245","html":"<a href=\"x\">before<ul><li></li></ul>after</a>","options":{}}
-{"id":"rust-stream-246","html":"<a href=\"x\">text <span></span></a>tail","options":{}}
-{"id":"rust-stream-247","html":"<a href=\"x\" title=\"Title\"><ul><li></li></ul></a>tail","options":{}}
-{"id":"rust-stream-248","html":"<a href=\"x\"><ul><li></li></ul></a><em>tail</em>","options":{}}
-{"id":"rust-stream-249","html":"<a href=\"x\"><img src=\"i\" alt=\"A\"> <span></span></a>tail","options":{}}
-{"id":"rust-stream-250","html":"<a href=\"x\" title=\"text\">text <span></span></a>","options":{}}
-{"id":"rust-stream-251","html":"<a href=\"x\" title=\"Title\">text <span></span></a>","options":{}}
-{"id":"rust-stream-252","html":"<a href=\"x\"> </a>tail","options":{}}
-{"id":"rust-stream-253","html":"<code><a href=\"x\"><ul><li></li></ul></a></code>","options":{}}
-{"id":"rust-stream-254","html":"<a href=\"x\"><ul><li><code>a </code></li></ul></a>","options":{}}
-{"id":"rust-stream-255","html":"<details><a href=\"x\"><ul><li></li></ul></a></details>","options":{}}
-{"id":"rust-stream-277","html":"<ul><li>a<ul><li>b<br></li></ul><h2>h</h2></li></ul>","options":{}}
-{"id":"rust-stream-279","html":"<ul><li><p>a</p><h2>h</h2></li></ul>","options":{}}
-{"id":"rust-stream-280","html":"<ol start=\"10\"><li><p>a</p><h2>h</h2></li></ol>","options":{}}
+{"id":"rust-stream-037","html":"<li><blockquote/><em><pre><blockquote>","options":{}}
+{"id":"rust-stream-038","html":"<ul><li><blockquote></blockquote><em><pre><blockquote></blockquote></pre></em></li></ul>","options":{}}
+{"id":"rust-stream-039","html":"<ul><li><blockquote></blockquote><em><pre><i><code>&#10;</code></i><h3>h</h3></pre></em></li></ul>","options":{}}
+{"id":"rust-stream-043","html":"<b>1) x<small><br> <ul><li>&#9;<br></li></ul></small>===<hr></b>","options":{}}
+{"id":"rust-stream-044","html":"><li>:&#32<br></><code><li>","options":{}}
+{"id":"rust-stream-045","html":"<i><br><a><li>><r><br>","options":{}}
+{"id":"rust-stream-046","html":"<br><a><li>x<br ><li>","options":{}}
+{"id":"rust-stream-050","html":"<p>café 😀</p>","options":{}}
+{"id":"rust-stream-051","html":"a<br><em></em><br>x","options":{}}
+{"id":"rust-stream-052","html":"<ul><li>a<br><span></span><br>x</li></ul>","options":{}}
+{"id":"rust-stream-053","html":"<p>a<br><br></p>x","options":{}}
+{"id":"rust-stream-054","html":"<ul><li>a<br><br></li><li>x</li></ul>","options":{}}
+{"id":"rust-stream-055","html":"<ul><li>x<br><br> </li><li>y</li></ul>","options":{}}
+{"id":"rust-stream-056","html":"<ul><li>a<ul><li><br><br>x</li></ul></li></ul>","options":{}}
+{"id":"rust-stream-057","html":"<p>first<br>second</p>","options":{}}
+{"id":"rust-stream-058","html":"<p>before\\<br>after<br><br>last</p>","options":{}}
+{"id":"rust-stream-061","html":"<table><tr><td>first<br>second</td></tr></table>","options":{}}
+{"id":"rust-stream-065","html":"<blockquote><p>intro</p><ul><li>one</li><li>two</li></ul></blockquote>","options":{}}
+{"id":"rust-stream-066","html":"<blockquote>lead<table><tr><td>a</td></tr></table>tail</blockquote>","options":{}}
+{"id":"rust-stream-067","html":"<blockquote><ul><li>one<ul><li>sub</li></ul></li></ul></blockquote>","options":{}}
+{"id":"rust-stream-068","html":"<ul><li><blockquote><ul><li>x</li><li>y</li></ul></blockquote></li></ul>","options":{}}
+{"id":"rust-stream-069","html":"<pre><code>const x = `hi ${y}`;</code></pre>","options":{}}
+{"id":"rust-stream-070","html":"<p>use <code>a`b</code> here</p>","options":{}}
+{"id":"rust-stream-071","html":"<table><tr><td>a`b</td><td>c\\d</td></tr></table>","options":{}}
+{"id":"rust-stream-072","html":"<p>text with <a href=\"/x\">a [bracket] link</a> end</p>","options":{}}
+{"id":"rust-stream-073","html":"<p>&#35; heading [label](url) and *bar* ~~baz~~ `qux` &amp;copy;</p><p>> quote</p><p>1. item</p><p>---</p>","options":{}}
+{"id":"rust-stream-074","html":"<ol start=\"10\"><li>> quote</li><li>after</li></ol>","options":{}}
+{"id":"rust-stream-078","html":"<a href=\"\">text</a>","options":{}}
+{"id":"rust-stream-079","html":"<a href=\"docs/a b\">text</a>","options":{}}
+{"id":"rust-stream-080","html":"<a href=\"docs/(a)\\file\">text</a>","options":{}}
+{"id":"rust-stream-081","html":"<a href=\"/x\" title=\"say &quot;hi&quot; \\ path\">text</a>","options":{}}
+{"id":"rust-stream-082","html":"<img src=\"/x.png\" alt=\"a ] \\ *bold* _em_ &#96;code&#96;\">","options":{}}
+{"id":"rust-stream-083","html":"<img src=\"/x.png\" alt=\"alt\" title=\"say &quot;hi&quot; \\ path\">","options":{}}
+{"id":"rust-stream-084","html":"<a href=\"/edit\" title=\"Edit\"><img src=\"/edit.svg\" alt=\"Edit\"></a>","options":{}}
+{"id":"rust-stream-085","html":"<a href=\"/x\" aria-label=\"Open\"><img src=\"/i\" alt=\"Alt\"></a>","options":{}}
+{"id":"rust-stream-086","html":"<a href=\"/x\" title=\"Title\"><span><span><img src=\"/i\" alt=\"Alt\"></span></span></a>","options":{}}
+{"id":"rust-stream-087","html":"<div><a href=\"/x\"><span><img src=\"/i\" alt=\"Alt\"> </span></a>Caption</div>","options":{}}
+{"id":"rust-stream-088","html":"<div><a href=\"/x\"><x-wrap><img src=\"/i\" alt=\"A\"></x-wrap></a> Caption</div>","options":{}}
+{"id":"rust-stream-089","html":"<p>before <code>a `b` c</code> after</p>","options":{}}
+{"id":"rust-stream-091","html":"<ol><li>one<pre><code>cmd</code></pre></li><li>two</li></ol>","options":{}}
+{"id":"rust-stream-092","html":"<ul><li>one<pre><code>cmd</code></pre></li><li>two</li></ul>","options":{}}
+{"id":"rust-stream-093","html":"<ol><li>one<pre><code>a</code></pre></li><li>two</li><li>three</li></ol>","options":{}}
+{"id":"rust-stream-094","html":"<summary>text <svg></svg></summary>","options":{}}
+{"id":"rust-stream-095","html":"<details><summary>text <svg><polyline points=\"1 2\"></polyline></svg></summary><p>b</p></details>","options":{}}
+{"id":"rust-stream-096","html":"<p>before</p><script>var x = 1; if (a < b) { y(); }</script><p>after</p>","options":{}}
+{"id":"rust-stream-097","html":"<script>a()</script><script>b()</script><p>ok</p>","options":{}}
+{"id":"rust-stream-098","html":"<p>x</p><script>let s = \"</scr\" + \"ipt>end\";</script><p>y</p>","options":{}}
+{"id":"rust-stream-099","html":"<p>one</p><script>\n  line1\n  line2\n</script><p>two</p>","options":{}}
+{"id":"rust-stream-100","html":"<pre class=language-rs><pre class=language-js></pre>y</pre>","options":{}}
+{"id":"rust-stream-101","html":"<pre><code>x</code><pre></pre>y</pre>","options":{}}
+{"id":"rust-stream-102","html":"<pre><code>x</code><pre>inner</pre>y</pre>","options":{}}
+{"id":"rust-stream-103","html":"<pre><pre></pre>y</pre>","options":{}}
+{"id":"rust-stream-104","html":"<pre><pre>inner</pre>y</pre>","options":{}}
+{"id":"rust-stream-105","html":"<pre><pre><code>x</code></pre>y</pre>","options":{}}
+{"id":"rust-stream-107","html":"<h3><em>","options":{}}
+{"id":"rust-stream-114","html":"<p>the quick brown fox jumps over the lazy dog and keeps running onwards</p>","options":{}}
+{"id":"rust-stream-115","html":"<p>double  spaces   and\ttabs\nand newlines spread across a longer run</p>","options":{}}
+{"id":"rust-stream-116","html":"<p>entity &amp; heavy &lt;text&gt; run that continues past a boundary</p>","options":{}}
+{"id":"rust-stream-117","html":"<p>trailing whitespace sensitive run ending in a space <em>x</em></p>","options":{}}
+{"id":"rust-stream-118","html":"<pre>preformatted  run   keeping    spacing across a chunk boundary</pre>","options":{}}
+{"id":"rust-stream-119","html":"<p>one two three four</p>","options":{}}
+{"id":"rust-stream-120","html":"<p>a  b</p>","options":{}}
+{"id":"rust-stream-121","html":"<p>a   b   c</p>","options":{}}
+{"id":"rust-stream-122","html":"<p> leading and trailing </p>","options":{}}
+{"id":"rust-stream-123","html":"<p>a <b>bold word</b> c</p>","options":{}}
+{"id":"rust-stream-124","html":"<p>one two<span> three four</span>five six</p>","options":{}}
+{"id":"rust-stream-125","html":"<p>a\tb c\nd  e</p>","options":{}}
+{"id":"rust-stream-126","html":"<p>plain a &amp; b more words</p>","options":{}}
+{"id":"rust-stream-127","html":"<p>hazard a *b* c words</p>","options":{}}
+{"id":"rust-stream-128","html":"<p>word café word ok</p>","options":{}}
+{"id":"rust-stream-129","html":"<pre>keep  double   spaces</pre>","options":{}}
+{"id":"rust-stream-130","html":"<p>trailing space before tag <em>x</em></p>","options":{}}
+{"id":"rust-stream-131","html":"<h2>foo #</h2>","options":{}}
+{"id":"rust-stream-132","html":"<h2>foo ##</h2>","options":{}}
+{"id":"rust-stream-133","html":"<h3>foo ##</h3>","options":{}}
+{"id":"rust-stream-134","html":"<h1>#</h1>","options":{}}
+{"id":"rust-stream-135","html":"<h2>foo # bar</h2>","options":{}}
+{"id":"rust-stream-136","html":"<h2>foo <em>b</em> #</h2>","options":{}}
+{"id":"rust-stream-137","html":"<h2>foo #</h2><p>after</p>","options":{}}
+{"id":"rust-stream-138","html":"<h2>a</h2><h2>b #</h2>","options":{}}
+{"id":"rust-stream-147","html":"<ul><li><h3></h3><p>b</p></li></ul>","options":{}}
+{"id":"rust-stream-148","html":"<ol start=\"10\"><li><h1></h1><p>b</p></li></ol>","options":{}}
+{"id":"rust-stream-149","html":"<ul><li>a<ul><li>b<ul><li><h3></h3><p>c</p></li></ul></li></ul></li></ul>","options":{}}
+{"id":"rust-stream-150","html":"<ul><li><pre>x</pre><h3></h3><p>b</p></li></ul>","options":{}}
+{"id":"rust-stream-151","html":"<ul><li><blockquote><h3></h3><p>b</p></blockquote></li></ul>","options":{}}
+{"id":"rust-stream-152","html":"<blockquote><ul><li><h3></h3><p>b</p></li></ul></blockquote>","options":{}}
+{"id":"rust-stream-160","html":"<ul><li>a<ol><li></li></ol></li></ul>","options":{}}
+{"id":"rust-stream-162","html":"<ul><li>a<ul><li></li><li>b</li></ul></li></ul>","options":{}}
+{"id":"rust-stream-171","html":"<li><li><i></li>","options":{}}
+{"id":"rust-stream-173","html":"<li><li><em></li>","options":{}}
+{"id":"rust-stream-174","html":"<ul><li><li><i></li></ul>","options":{}}
+{"id":"rust-stream-179","html":"<dd><p>.<br />*<Foo/Bar>","options":{}}
+{"id":"rust-stream-180","html":"<dd><tr><a href=\"u\" title=\"t\">_</html>","options":{}}
+{"id":"rust-stream-183","html":"<dd>*<blockquote><blockquote>_","options":{}}
+{"id":"rust-stream-185","html":"<dd><ol><i><ol>_","options":{}}
+{"id":"rust-stream-187","html":"<table><caption>c</caption>.","options":{}}
+{"id":"rust-stream-188","html":"<table><p>x</p>.","options":{}}
+{"id":"rust-stream-189","html":"<table><caption>c</caption><tr>","options":{}}
+{"id":"rust-stream-190","html":"<td>d</td><table><tr>","options":{}}
+{"id":"rust-stream-191","html":"<table><p>x</p><dd>","options":{}}
+{"id":"rust-stream-197","html":"<ul><li>.<br />\n<table><caption>c</caption><tr><td>d</td></tr></table>","options":{}}
+{"id":"rust-stream-198","html":"<ol><li>.<br />\n<table><caption>c</caption><tr><td>d</td></tr></table>","options":{}}
+{"id":"rust-stream-199","html":"<i><ul><li>.<br />\n<table><caption>c</caption><tr><td>d</td></tr></table>","options":{}}
+{"id":"rust-stream-200","html":"<ul><li>t<ul><li>.<br />\n<table><caption>c</caption><tr><td>d</td></tr></table>","options":{}}
+{"id":"rust-stream-205","html":"<li><li><br /><i>","options":{}}
+{"id":"rust-stream-206","html":"<li><li><br /><em>","options":{}}
+{"id":"rust-stream-207","html":"<ul><li><ul><li><br /><i>","options":{}}
+{"id":"rust-stream-208","html":"<tr><li><br /><i>","options":{}}
+{"id":"rust-stream-209","html":".<li><br /><i>","options":{}}
+{"id":"rust-stream-210","html":"<ul><li><blockquote><ul><li>","options":{}}
+{"id":"rust-stream-217","html":"<i><blockquote>","options":{}}
+{"id":"rust-stream-218","html":"<i>><blockquote>","options":{}}
+{"id":"rust-stream-219","html":"<em>-<blockquote>","options":{}}
+{"id":"rust-stream-220","html":"<table><dt><blockquote>","options":{}}
+{"id":"rust-stream-221","html":"<tr><a href=\"u\"><blockquote>","options":{}}
+{"id":"rust-stream-227","html":"<li><li><br /><ul><li>","options":{}}
+{"id":"rust-stream-228","html":"<ul><li><ul><li><br /><ul><li>","options":{}}
+{"id":"rust-stream-229","html":"<tr><li><br /><ul><li>","options":{}}
+{"id":"rust-stream-230","html":"<td>d</td><li><br /><ul><li>","options":{}}
+{"id":"rust-stream-235","html":"$&#9","options":{}}
+{"id":"rust-stream-236","html":"$&#9;","options":{}}
+{"id":"rust-stream-237","html":"a&#9;&#9;","options":{}}
+{"id":"rust-stream-238","html":"x&Tab;","options":{}}
+{"id":"rust-stream-253","html":"<lI><dd/L><oL><lI><oL><I><hr><dd/L>%%&<lI><<o>[","options":{}}
+{"id":"rust-stream-257","html":"a a<li><p><code>","options":{}}
+{"id":"rust-stream-258","html":"a a<li><html><strong>","options":{}}
+{"id":"rust-stream-259","html":"<p href=\"\">text</p>","options":{}}
+{"id":"rust-stream-260","html":"<p class=\"v\">text</p>","options":{}}
+{"id":"rust-stream-261","html":"<p data-x='v'>text</p>","options":{}}
+{"id":"rust-stream-262","html":"<p data-x=\"a>b\">text</p>","options":{}}
+{"id":"rust-stream-263","html":"<ul><li><figure><figcaption><q><h3>T</h3></q>s</figcaption></figure></li></ul>","options":{}}
+{"id":"rust-stream-264","html":"<ul><li><figure><figcaption><q><h3></h3></q>s</figcaption></figure></li></ul>","options":{}}
+{"id":"rust-stream-265","html":"<ul><li><figure><figcaption><a href=\"/l\"></a><h3>T</h3></figcaption></figure></li></ul>","options":{}}
+{"id":"rust-stream-266","html":"<ul><li><figure><figcaption><del><h3>T</h3></del></figcaption></figure></li></ul>","options":{}}
+{"id":"rust-stream-271","html":"<a href=\"x\"><ul><li></li></ul></a>","options":{}}
+{"id":"rust-stream-272","html":"<ul><li><a href=\"x\"><ul><li></li></ul></a><ul><li># h</li></ul></li></ul>","options":{}}
+{"id":"rust-stream-273","html":"<a href=\"x\"><ul><li></li><li></li></ul></a>","options":{}}
+{"id":"rust-stream-274","html":"<a href=\"x\"><ol start=\"10\"><li></li></ol></a>","options":{}}
+{"id":"rust-stream-275","html":"<a href=\"x\"><ul><li><ul><li></li></ul></li></ul></a>","options":{}}
+{"id":"rust-stream-276","html":"<a href=\"x\"><ul><li>one</li><li>two</li></ul></a>","options":{}}
+{"id":"rust-stream-277","html":"<a href=\"x\">before<ul><li></li></ul>after</a>","options":{}}
+{"id":"rust-stream-278","html":"<a href=\"x\">text <span></span></a>tail","options":{}}
+{"id":"rust-stream-279","html":"<a href=\"x\" title=\"Title\"><ul><li></li></ul></a>tail","options":{}}
+{"id":"rust-stream-280","html":"<a href=\"x\"><ul><li></li></ul></a><em>tail</em>","options":{}}
+{"id":"rust-stream-281","html":"<a href=\"x\"><img src=\"i\" alt=\"A\"> <span></span></a>tail","options":{}}
+{"id":"rust-stream-282","html":"<a href=\"x\" title=\"text\">text <span></span></a>","options":{}}
+{"id":"rust-stream-283","html":"<a href=\"x\" title=\"Title\">text <span></span></a>","options":{}}
+{"id":"rust-stream-284","html":"<a href=\"x\"> </a>tail","options":{}}
+{"id":"rust-stream-285","html":"<code><a href=\"x\"><ul><li></li></ul></a></code>","options":{}}
+{"id":"rust-stream-286","html":"<a href=\"x\"><ul><li><code>a </code></li></ul></a>","options":{}}
+{"id":"rust-stream-287","html":"<details><a href=\"x\"><ul><li></li></ul></a></details>","options":{}}
+{"id":"rust-stream-307","html":"<ul><li><blockquote>q</blockquote><pre><code></code></pre></li><li>x</li></ul>","options":{}}
+{"id":"rust-stream-308","html":"<ul><li><pre><code></code></pre></li></ul>","options":{}}
+{"id":"rust-stream-309","html":"<ol start=\"10\"><li><pre><code></code></pre></li></ol>","options":{}}
+{"id":"rust-stream-310","html":"<blockquote><ul><li><pre><code></code></pre></li></ul></blockquote>","options":{}}
+{"id":"rust-stream-311","html":"<ul><li><pre><code></code></pre>after</li><li>b</li></ul>","options":{}}
+{"id":"rust-stream-312","html":"<ol start=\"10\"><li><pre><code></code></pre>after</li><li>b</li></ol>","options":{}}
+{"id":"rust-stream-321","html":"<ul><li>a<ul><li>b<br></li></ul><h2>h</h2></li></ul>","options":{}}
+{"id":"rust-stream-323","html":"<ul><li><p>a</p><h2>h</h2></li></ul>","options":{}}
+{"id":"rust-stream-324","html":"<ol start=\"10\"><li><p>a</p><h2>h</h2></li></ol>","options":{}}
+{"id":"rust-stream-327","html":"<ul><li><ul><li><h3></h3><figure><figcaption><code><em><div></div></em></code></figcaption></figure><div>x</div></li></ul></li></ul>","options":{}}
 {"id":"rust-endtag-001","html":"<p><strong>x</nope>y</strong>z</p>","options":{}}
 {"id":"rust-endtag-002","html":"</nope><p>kept</p>","options":{}}
 {"id":"rust-endtag-003","html":"<p><strong>x</strong foo>y</p>","options":{}}

@@ -11,15 +11,16 @@ It has three jobs:
 
 ## Upstream pin
 
-`tools/upstream` is a shallow submodule at **`55937d7c`**, the released `mdream` 2.0.3 state
-(the npm `2.0.3` package). The `v2.0.3` git tag (`a7a8802`) is 66 commits earlier and is **not**
-the parity target.
+`tools/upstream` is a shallow submodule at **`9ea07b84`**, `mdream` 2.0.3 plus the thirteen
+post-release fixes merged on `main` (issues #386, #420, #445–#451 and the workspace
+dependency refresh). The npm `2.0.3` package state is `55937d7c`; the `v2.0.3` git tag
+(`a7a8802`) is 66 commits earlier and is **not** the parity target.
 
 ```shell
 git submodule update --init --depth 1 tools/upstream
 cd tools/upstream
-git fetch --depth 1 origin 55937d7ccf3d3b19de393504ed6a569be9440e46
-git checkout 55937d7c
+git fetch --depth 1 origin 9ea07b841c29f7d26ebb4122829ecb3201265bc3
+git checkout 9ea07b84
 ```
 
 ## Build

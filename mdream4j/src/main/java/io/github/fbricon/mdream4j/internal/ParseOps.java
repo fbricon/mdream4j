@@ -2746,11 +2746,26 @@ final class ParseOps {
   private static int splitPoint(CharSequence text, int floor, boolean hardCut) {
     int length = text.length();
     int index = Math.max(0, length - 1);
-    while (index > floor) {
+    int afterRuleRun = -1;
+    // Bounded so the piece stays close to the threshold and the carried tail short.
+    int reach = Math.max(0, floor - ConvertState.TEXT_RUN_SPLIT_SCAN * 16);
+    while (index > floor || (afterRuleRun >= 0 && index > reach)) {
       index--;
       if (text.charAt(index) == ' ' && !isSplitStop(text.charAt(index + 1))) {
+        // A piece ending on a `-`/`=`/`*`/`_` run may end its line there, which the
+        // escaper must read as a setext underline or thematic break, so look up to
+        // 1 KiB further back for another cut before taking this one.
+        if (index > 0 && isRuleChar(text.charAt(index - 1))) {
+          if (afterRuleRun < 0) {
+            afterRuleRun = index + 1;
+          }
+          continue;
+        }
         return index + 1;
       }
+    }
+    if (afterRuleRun >= 0) {
+      return afterRuleRun;
     }
     // A tail of one space would be trimmed as the next piece's indentation.
     if (length == 0) {
@@ -2761,6 +2776,10 @@ final class ParseOps {
       cut--;
     }
     return hardCut && cut >= 0 && text.charAt(cut) != ' ' ? cut : -1;
+  }
+
+  private static boolean isRuleChar(char c) {
+    return c == '-' || c == '=' || c == '*' || c == '_';
   }
 
   private static boolean isSplitStop(char c) {
@@ -2844,11 +2863,11 @@ final class ParseOps {
     // Other link holds end within the link's URL length.
     int bracketPos = Integer.MAX_VALUE;
     if (self.link.open && (self.link.pinsOutput || self.link.emptyTextPending)) {
-      bracketPos = Math.min(bracketPos, self.link.bracketPos);
+      bracketPos = Math.min(bracketPos, self.link.bracketPos - self.link.headingBreakPrefixLen);
     }
     for (ConvertState.LinkOutputState parent : self.parentLinks) {
       if (parent.open && (parent.pinsOutput || parent.emptyTextPending)) {
-        bracketPos = Math.min(bracketPos, parent.bracketPos);
+        bracketPos = Math.min(bracketPos, parent.bracketPos - parent.headingBreakPrefixLen);
       }
     }
     if (bracketPos != Integer.MAX_VALUE) {
@@ -3395,8 +3414,15 @@ final class ParseOps {
   }
 
   static boolean canCompleteRawEndTag(String candidate, String expected) {
-    return expected.length() >= candidate.length()
-        && expected.regionMatches(0, candidate, 0, candidate.length());
+    if (expected.length() < candidate.length()) {
+      return false;
+    }
+    for (int i = 0; i < candidate.length(); i++) {
+      if (!Chars.asciiEqualsIgnoreCase(expected.charAt(i), candidate.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   static boolean hasAsciiUpper(String value) {

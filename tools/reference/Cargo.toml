@@ -13,6 +13,10 @@ crate-type = ["cdylib", "rlib"]
 name = "mdream-golden"
 path = "src/bin/golden.rs"
 
+[[bin]]
+name = "stream-golden"
+path = "src/bin/stream_golden.rs"
+
 [dependencies]
 mdream = { path = "../upstream/crates/core", default-features = false, features = [
   "markdown",

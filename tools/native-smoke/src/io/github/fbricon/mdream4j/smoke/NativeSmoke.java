@@ -8,9 +8,16 @@ package io.github.fbricon.mdream4j.smoke;
 import io.github.fbricon.mdream4j.HtmlToMarkdown;
 import io.github.fbricon.mdream4j.MarkdownStream;
 import io.github.fbricon.mdream4j.Options;
+import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.logging.Formatter;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import java.util.logging.StreamHandler;
 
 /**
  * Converts three generated documents and prints a digest per conversion.
@@ -25,9 +32,20 @@ import java.security.NoSuchAlgorithmException;
  */
 public final class NativeSmoke {
 
+  /**
+   * Results go to stdout, timing to stderr; {@code run.sh} diffs the former and parses the latter,
+   * so the handlers below must emit the message and nothing else.
+   */
+  private static final System.Logger REPORT =
+      System.getLogger("io.github.fbricon.mdream4j.smoke.report");
+
+  private static final System.Logger TIMING =
+      System.getLogger("io.github.fbricon.mdream4j.smoke.timing");
+
   private NativeSmoke() {}
 
   public static void main(String[] args) {
+    configureLogging();
     String kitchenSink = kitchenSink();
     String large = largeDocument();
     String deep = deepDocument();
@@ -45,7 +63,7 @@ public final class NativeSmoke {
     report("deep/default", HtmlToMarkdown.convert(deep));
     reportStream("deep/stream-7", deep, 7);
 
-    System.err.println("first-conversion-ms " + (firstMillis / 1_000_000.0));
+    TIMING.log(System.Logger.Level.INFO, "first-conversion-ms " + (firstMillis / 1_000_000.0));
   }
 
   private static String kitchenSink() {
@@ -129,7 +147,46 @@ public final class NativeSmoke {
   }
 
   private static void report(String name, String markdown) {
-    System.out.println(name + " " + sha256(markdown) + " " + markdown.length());
+    REPORT.log(System.Logger.Level.INFO, name + " " + sha256(markdown) + " " + markdown.length());
+  }
+
+  /**
+   * Points each smoke logger at its stream with a message-only formatter.
+   *
+   * <p>{@code System.Logger} has no output API of its own, so this binds the JUL handlers behind
+   * it. The default {@code SimpleFormatter} would add timestamps and class names, which would
+   * break both {@code run.sh}'s diff and its timing parser.
+   */
+  private static void configureLogging() {
+    bind(REPORT, System.out);
+    bind(TIMING, System.err);
+  }
+
+  private static void bind(System.Logger logger, PrintStream stream) {
+    Logger jul = Logger.getLogger(logger.getName());
+    jul.setUseParentHandlers(false);
+    jul.setLevel(Level.ALL);
+    for (Handler handler : jul.getHandlers()) {
+      jul.removeHandler(handler);
+    }
+    Handler handler =
+        new StreamHandler(stream, new MessageOnlyFormatter()) {
+          @Override
+          public synchronized void close() {
+            // System.out/err outlive this handler; never let shutdown close them.
+            flush();
+          }
+        };
+    handler.setLevel(Level.ALL);
+    jul.addHandler(handler);
+  }
+
+  /** Emits exactly the log message plus the platform line separator. */
+  private static final class MessageOnlyFormatter extends Formatter {
+    @Override
+    public String format(LogRecord record) {
+      return record.getMessage() + System.lineSeparator();
+    }
   }
 
   private static String sha256(String value) {

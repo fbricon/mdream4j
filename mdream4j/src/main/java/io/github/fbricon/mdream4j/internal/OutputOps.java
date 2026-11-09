@@ -336,7 +336,32 @@ final class OutputOps {
   }
 
   static void truncateBuffer(ConvertState self, int len) {
-    self.buffer.setLength(Math.min(len, self.buffer.length()));
+    int target = Math.min(len, self.buffer.length());
+    self.buffer.setLength(target);
+    // A truncated break run is no longer contiguous with the buffer: drop the runs entirely
+    // beyond the cut and clip the one the cut lands in, or the next yield holds a stale
+    // `outputEnd` past the live bytes.
+    while (!self.streamingBreakRuns.isEmpty()
+        && self.streamingBreakRuns.get(self.streamingBreakRuns.size() - 1).outputStart > target) {
+      self.streamingBreakRuns.remove(self.streamingBreakRuns.size() - 1);
+    }
+    if (!self.streamingBreakRuns.isEmpty()) {
+      ConvertState.StreamingBreakRun run =
+          self.streamingBreakRuns.get(self.streamingBreakRuns.size() - 1);
+      if (run.outputStart == target) {
+        if (run.count == 1) {
+          self.streamingBreakRuns.remove(self.streamingBreakRuns.size() - 1);
+        } else {
+          run.count--;
+          self.buffer.append(run.unit);
+          run.outputEnd = self.buffer.length();
+        }
+        return;
+      }
+      if (run.outputEnd > target) {
+        run.outputEnd = target;
+      }
+    }
   }
 
   /**
@@ -938,6 +963,8 @@ final class OutputOps {
       marker.contentStart = self.buffer.length();
       marker.kind = kind;
       marker.startsAtHardBreak = self.hardBreakEnd == marker.outputStart;
+      // No marker opens with a newline; only a prefixed heading break does.
+      marker.restoresHeadingBreak = output.startsWith("\n");
       self.openMarkers.add(marker);
     } else if (!keepsMarkers
         && !self.openMarkers.isEmpty()
@@ -972,8 +999,12 @@ final class OutputOps {
       if (marker.startsAtHardBreak) {
         self.hardBreakEnd = marker.outputStart;
       }
+      if (marker.restoresHeadingBreak) {
+        self.headingBreakPending = true;
+      }
       self.lastContentCacheLen = 0;
       resetEmptyTentativeCaptionFrames(self);
+      restoreQuoteParentBoundary(self);
       self.lastNodeIsInline = isInline;
       return true;
     }
@@ -1021,6 +1052,7 @@ final class OutputOps {
         && self.captionBoundary == ConvertState.CAPTION_BOUNDARY_NONE
         && self.captionFrames.isEmpty()
         && !self.listRulePending
+        && !self.headingBreakPending
         && !self.pendingInlineWhitespace
         && !self.pendingRawHtmlBoundary
         && !self.preFencePending
@@ -1137,6 +1169,15 @@ final class OutputOps {
       return;
     }
 
+    // Before a caption opens on this text, so its marker follows the break.
+    if (self.headingBreakPending) {
+      String flushed = flushHeadingBreakBeforeText(self, text);
+      if (flushed == null) {
+        return;
+      }
+      text = flushed;
+    }
+
     boolean captionActive =
         self.captionBoundary != ConvertState.CAPTION_BOUNDARY_NONE
             || !self.captionFrames.isEmpty();
@@ -1152,7 +1193,10 @@ final class OutputOps {
           }
         }
       }
-      if (ownsLeadingSpace && text.charAt(0) == ' ') {
+      if (ownsLeadingSpace
+          && !(self.captionBoundary == ConvertState.CAPTION_BOUNDARY_QUOTE_TENTATIVE
+              && self.captionBoundaryNewLines == ConvertState.QUOTE_CLOSED)
+          && text.charAt(0) == ' ') {
         text = text.substring(1);
         if (text.isEmpty()) {
           return;
@@ -1791,6 +1835,7 @@ final class OutputOps {
             return "\n" + prefix + HEADING_PREFIXES[depth];
           }
           if (self.listIndent.length() > 0
+              && !headingKeptInlineInItem(self, true)
               && self.stack.size() >= 2
               && self.stack.get(self.stack.size() - 2).tagId == Consts.TAG_LI) {
             // A heading directly inside a list item must break away from the
@@ -1834,17 +1879,45 @@ final class OutputOps {
       case Consts.TAG_INS:
         return "<ins>";
       case Consts.TAG_P:
+      case Consts.TAG_DIV:
+        // A drain can empty the buffer mid-document, so the check reads the
+        // flushed tail like the close-side twin below, not just the buffer. A
+        // pending `<pre>` fence is written after this output and opens the
+        // block itself, so a separator here would land inside the code.
         if (self.depthMap[Consts.TAG_LI] > 0
             && !self.inTableCell()
+            && !self.preFencePending
             && lastOutputByte(self) >= 0
             && lastOutputByte(self) != ' '
             && lastOutputByte(self) != '\n') {
+          // Divs otherwise keep their existing list spacing. Only a bare
+          // heading marker needs a boundary before the div's first text.
+          if (tagId == Consts.TAG_DIV) {
+            StringBuilder bytes = self.buffer;
+            // Seven hashes already rule out a marker, so a long retained run
+            // is not rescanned at every div.
+            int marker = bytes.length();
+            while (marker > 0
+                && bytes.length() - marker < 7
+                && bytes.charAt(marker - 1) == '#') {
+              marker--;
+            }
+            int run = bytes.length() - marker;
+            if (run < 1 || run > 6 || !opensBlockLine(self, marker)) {
+              return null;
+            }
+          }
           return "\n\n" + self.listIndent;
         }
         return null;
       case Consts.TAG_BLOCKQUOTE:
+        // The completed subtree receives quote prefixes once every structural
+        // newline is known. Preserve the list marker's trailing space here. A
+        // table cell renders its list as raw HTML on the row's own line.
         return (self.depthMap[Consts.TAG_LI] > 0
-                && self.captionBoundary != ConvertState.CAPTION_BOUNDARY_PENDING)
+                && !self.inTableCell()
+                && self.captionBoundary != ConvertState.CAPTION_BOUNDARY_PENDING
+                && self.captionBoundary != ConvertState.CAPTION_BOUNDARY_QUOTE_PARENT)
             ? "\n"
             : null;
       case Consts.TAG_CAPTION:
@@ -1882,7 +1955,8 @@ final class OutputOps {
         }
         if (self.depthMap[Consts.TAG_LI] > 0) {
           int last = lastOutputByte(self);
-          if (last >= 0
+          if (self.captionBoundary != ConvertState.CAPTION_BOUNDARY_QUOTE_PARENT
+              && last >= 0
               && last != ' '
               && last != '\n'
               && last != '\t'
@@ -2292,7 +2366,7 @@ final class OutputOps {
       return 1;
     }
     Long parsed = ParseOps.parseBoundedU32(value, 255);
-    return parsed == null ? 1 : (int) Math.max(1, Math.min(parsed, 16));
+    return parsed == null ? 1 : (int) Math.max(1, Math.min(parsed, ConvertState.MAX_CELL_SPAN));
   }
 
   // === Write ===
@@ -2701,6 +2775,8 @@ final class OutputOps {
     if (markerOffset < 0) {
       markerOffset = 0;
     }
+    // The fence took the tentative quote separator; restoring it would cut the fence.
+    settleQuoteBoundaryAtFence(self);
     ConvertState.CodeFenceState fence = new ConvertState.CodeFenceState();
     fence.outputStart = outputStart;
     fence.markerOffset = markerOffset;
@@ -2708,6 +2784,19 @@ final class OutputOps {
     fence.indent = indent;
     fence.language = language;
     self.codeFence = fence;
+  }
+
+  /** A quote that closed inside the fence may have trimmed the reservation already. */
+  private static void dropEmptyFenceReservation(ConvertState self, String indent) {
+    if (self.buffer.toString().endsWith(indent)) {
+      truncateBuffer(self, self.buffer.length() - indent.length());
+    }
+  }
+
+  private static void settleQuoteBoundaryAtFence(ConvertState self) {
+    if (self.captionBoundary == ConvertState.CAPTION_BOUNDARY_QUOTE_TENTATIVE) {
+      self.captionBoundary = ConvertState.CAPTION_BOUNDARY_NONE;
+    }
   }
 
   /** Compute the closing delimiter, rewriting any too-short opener in place. */
@@ -2724,6 +2813,13 @@ final class OutputOps {
             fence.contentStart,
             marker,
             fence.indent == null ? "" : fence.indent);
+    // The opener reserves the first content line's list indent. With no body,
+    // remove that reservation so the empty line stays blank, as in JS.
+    if (self.buffer.length() == fence.contentStart
+        && fence.indent != null
+        && !fence.indent.isEmpty()) {
+      dropEmptyFenceReservation(self, fence.indent);
+    }
     int count = Math.max(maxRun + 1, 3);
     StringBuilder delimiter = new StringBuilder(count);
     for (int i = 0; i < count; i++) {
@@ -2819,6 +2915,19 @@ final class OutputOps {
       end--;
     }
     if (end == 0 || bytes.charAt(end - 1) != '#') {
+      return;
+    }
+    // A run that only the line's block lead precedes is the heading's own marker
+    // instead: the heading is empty, and the marker's trailing space would read
+    // as a list item's open content column.
+    int marker = end - 1;
+    while (marker > 0 && bytes.charAt(marker - 1) == '#') {
+      marker--;
+    }
+    if (opensBlockLine(self, marker)) {
+      if (bytes.charAt(bytes.length() - 1) == ' ') {
+        trimTrailingSpaces(self);
+      }
       return;
     }
     int line = 0;
@@ -2918,6 +3027,11 @@ final class OutputOps {
     }
     int quotedEnd = frame.contentStart + quoted.length();
     for (ConvertState.CodeSpanState span : self.codeSpans) {
+      // A span opened before the quote holds the prefix written at its content
+      // start, as in JS, so `<code><blockquote>` keeps its opener in place.
+      if (span.outputStart < frame.contentStart && span.contentStart == frame.contentStart) {
+        continue;
+      }
       span.outputStart = blockquoteRemap(span.outputStart, frame, content, contentEnd, quotedEnd);
       span.contentStart = blockquoteRemap(span.contentStart, frame, content, contentEnd, quotedEnd);
     }
@@ -3050,11 +3164,111 @@ final class OutputOps {
 
   static boolean prepareCaptionBoundary(ConvertState self, boolean includeListIndent) {
     boolean consumesBoundary = self.captionBoundary != ConvertState.CAPTION_BOUNDARY_NONE;
+    int spacing;
     if (self.captionBoundary == ConvertState.CAPTION_BOUNDARY_PENDING) {
-      writeCaptionBoundary(self, self.captionBoundaryNewLines, includeListIndent);
+      spacing = self.captionBoundaryNewLines;
+    } else if (self.captionBoundary == ConvertState.CAPTION_BOUNDARY_QUOTE_PARENT) {
+      spacing = 2;
+    } else {
+      spacing = -1;
+    }
+    if (spacing >= 0) {
+      writeCaptionBoundary(self, spacing, includeListIndent);
       self.captionBoundary = ConvertState.CAPTION_BOUNDARY_CONSUME_SPACE;
     }
     return consumesBoundary;
+  }
+
+  static boolean quoteBoundaryPending(ConvertState self) {
+    return self.captionBoundary == ConvertState.CAPTION_BOUNDARY_QUOTE_PARENT
+        || self.captionBoundary == ConvertState.CAPTION_BOUNDARY_QUOTE_TENTATIVE;
+  }
+
+  // Default inline output takes the separator without settling it, so the next
+  // list or block transition still spaces itself. Literal output settles it.
+  private static boolean prepareInlineQuoteBoundary(ConvertState self, boolean literal) {
+    int separatorStart = self.buffer.length();
+    boolean consumesBoundary = prepareCaptionBoundary(self, true);
+    if (literal) {
+      self.captionBoundary = ConvertState.CAPTION_BOUNDARY_NONE;
+    } else if (self.captionBoundary == ConvertState.CAPTION_BOUNDARY_CONSUME_SPACE
+        || (self.captionBoundary == ConvertState.CAPTION_BOUNDARY_QUOTE_TENTATIVE
+            && self.captionBoundaryNewLines == ConvertState.QUOTE_CLOSED)) {
+      self.captionBoundary = ConvertState.CAPTION_BOUNDARY_QUOTE_TENTATIVE;
+      self.captionBoundaryNewLines = self.buffer.length() - separatorStart;
+    }
+    return consumesBoundary;
+  }
+
+  // Text after a closing delimiter continues its line, so its first space
+  // separates words. It is not the block's first text, which the parser trims.
+  private static void closeQuoteWrapper(ConvertState self) {
+    self.captionBoundary = ConvertState.CAPTION_BOUNDARY_QUOTE_TENTATIVE;
+    self.captionBoundaryNewLines = ConvertState.QUOTE_CLOSED;
+    if (self.firstBlockParentIndex >= 0) {
+      self.stack.get(self.firstBlockParentIndex).childTextNodeIndex++;
+    }
+  }
+
+  // Marker streaming holds already retain the preceding whitespace. Only a
+  // fully dropped wrapper exposes this tentative separator at the buffer tail.
+  static void restoreQuoteParentBoundary(ConvertState self) {
+    if (self.captionBoundary != ConvertState.CAPTION_BOUNDARY_QUOTE_TENTATIVE) {
+      return;
+    }
+    int length = self.captionBoundaryNewLines;
+    if (length <= 0 || length > self.buffer.length()) {
+      return;
+    }
+    int start = self.buffer.length() - length;
+    for (int i = start; i < self.buffer.length(); i++) {
+      if (!Chars.isAsciiWhitespace(self.buffer.charAt(i))) {
+        return;
+      }
+    }
+    truncateBuffer(self, start);
+    self.lastContentCacheLen = 0;
+    self.lastTextNodeContainsWhitespace = false;
+    self.hasLastTextNode = false;
+    self.captionBoundary = ConvertState.CAPTION_BOUNDARY_QUOTE_PARENT;
+  }
+
+  /**
+   * A quote's pending continuation meets the next element's enter. Out of line: runs for every
+   * element in the text and HTML formats.
+   */
+  private static String settleQuoteBoundaryAtEnter(
+      ConvertState self,
+      int tagId,
+      boolean isInline,
+      boolean enterIsLiteral,
+      String output) {
+    if (tagId == Consts.TAG_LI) {
+      restoreQuoteParentBoundary(self);
+      self.captionBoundary = ConvertState.CAPTION_BOUNDARY_NONE;
+    } else if (!isInline && self.openMarkers.isEmpty()) {
+      // Once its wrappers closed, a block settles the tentative spacing. One
+      // that survived took the separator, so the block spaces itself; if all
+      // dropped, the boundary is pending again and writes the quote's break.
+      restoreQuoteParentBoundary(self);
+      if (self.captionBoundary == ConvertState.CAPTION_BOUNDARY_QUOTE_TENTATIVE) {
+        self.captionBoundary = ConvertState.CAPTION_BOUNDARY_NONE;
+      } else if (tagId == Consts.TAG_BLOCKQUOTE && !enterIsLiteral) {
+        output = null;
+      }
+    } else if (tagId == Consts.TAG_BR
+        && self.captionBoundary != ConvertState.CAPTION_BOUNDARY_QUOTE_PARENT) {
+      // The break's whitespace would pass for the spacing at the buffer tail.
+      self.captionBoundary = ConvertState.CAPTION_BOUNDARY_QUOTE_TENTATIVE;
+      self.captionBoundaryNewLines = 0;
+    }
+    // Paragraph, HR and fence fragments can already carry their block separator.
+    if (self.captionBoundary == ConvertState.CAPTION_BOUNDARY_QUOTE_PARENT
+        && output != null
+        && output.startsWith("\n\n")) {
+      self.captionBoundary = ConvertState.CAPTION_BOUNDARY_CONSUME_SPACE;
+    }
+    return output;
   }
 
   static void setCaptionBoundaryPending(ConvertState self, int newLines) {
@@ -3258,6 +3472,9 @@ final class OutputOps {
       return;
     }
     self.preFencePending = false;
+    // The fence opens its own block, which is the break a heading before it
+    // owed; written later, that break would land inside the code.
+    self.headingBreakPending = false;
     // The fence belongs to the `<pre>` that requested it, not to whatever `<pre>`
     // is open when its first content arrives: a nested `<pre>` must not steal it.
     self.preFenceOwnerDepth = self.preFencePendingDepth;
@@ -3366,11 +3583,17 @@ final class OutputOps {
 
   /** Clean-mode empty link: drop the whole {@code [](url)}. */
   private static void dropEmptyLinkText(ConvertState self, int bracketPos, boolean isInline) {
-    truncateBuffer(self, bracketPos);
+    int prefixLen = self.link.headingBreakPrefixLen;
+    int start = bracketPos - prefixLen;
+    truncateBuffer(self, start);
     if (self.link.startsAtHardBreak) {
-      self.hardBreakEnd = self.link.bracketPos;
+      self.hardBreakEnd = start;
+    }
+    if (prefixLen != 0) {
+      self.headingBreakPending = true;
     }
     resetEmptyTentativeCaptionFrames(self);
+    restoreQuoteParentBoundary(self);
     endLink(self);
     self.lastNodeIsInline = isInline;
   }
@@ -3427,6 +3650,15 @@ final class OutputOps {
     }
     if (self.hardBreakEnd >= 0 && offset < self.hardBreakEnd) {
       self.hardBreakEnd = -1;
+    }
+    if (offset < self.captionLineSpacesStart) {
+      self.captionLineSpacesStart = 0;
+      self.captionLineSpacesEnd = -1;
+    } else if (self.captionLineSpacesEnd > offset) {
+      self.captionLineSpacesEnd = offset;
+    }
+    if (offset < self.captionLineOpensStart) {
+      self.captionLineOpensStart = -1;
     }
   }
 
@@ -3510,6 +3742,284 @@ final class OutputOps {
     endLink(self);
   }
 
+  // === Heading break in a list item ===
+
+  private static boolean startsWithHeadingPrefix(String value) {
+    if (value == null) {
+      return false;
+    }
+    int hashes = 0;
+    while (hashes < 7 && hashes < value.length() && value.charAt(hashes) == '#') {
+      hashes++;
+    }
+    return hashes > 0
+        && hashes <= 6
+        && hashes < value.length()
+        && (value.charAt(hashes) == ' ' || value.charAt(hashes) == '\t');
+  }
+
+  /** A settled heading break: the output to write and the break bytes it took as a prefix. */
+  private static final class SettledHeadingBreak {
+    String output;
+    int prefixLen;
+  }
+
+  /**
+   * Resolve a pending heading break at an element's enter. Output that starts its own line already
+   * ends the heading's, and an item or a caption writes its own separation. Visible output takes
+   * the break as a prefix, so an empty marker pair dropped later takes it back; a leading space
+   * meant to separate it from text on the same line goes. Output with nothing visible leaves the
+   * break to whatever follows.
+   */
+  private static SettledHeadingBreak settleHeadingBreak(
+      ConvertState self, int tagId, String output) {
+    String fragment = output == null ? "" : output;
+    SettledHeadingBreak result = new SettledHeadingBreak();
+    result.output = output;
+    if (tagId == Consts.TAG_LI
+        || tagId == Consts.TAG_FIGCAPTION
+        || stripLeadingSpaces(fragment).startsWith("\n")) {
+      self.headingBreakPending = false;
+      // The caption's frame is already pushed; an empty caption hands it back.
+      if (tagId == Consts.TAG_FIGCAPTION
+          && self.depthMap[Consts.TAG_PRE] == 0
+          && !self.captionFrames.isEmpty()) {
+        self.captionFrames.get(self.captionFrames.size() - 1).restoresHeadingBreak = true;
+      }
+    } else if (Chars.hasVisible(fragment)) {
+      self.headingBreakPending = false;
+      String trimmed = stripLeadingSpaces(fragment);
+      result.output = "\n\n" + self.listIndent + trimmed;
+      result.prefixLen = 2 + self.listIndent.length();
+    }
+    return result;
+  }
+
+  private static String stripLeadingSpaces(String value) {
+    int index = 0;
+    while (index < value.length() && value.charAt(index) == ' ') {
+      index++;
+    }
+    return value.substring(index);
+  }
+
+  /**
+   * Write a pending heading break before a text node. Returns the text that follows it, or
+   * {@code null} when the node is only whitespace and keeps waiting.
+   */
+  private static String flushHeadingBreakBeforeText(ConvertState self, String text) {
+    if (!Chars.hasVisible(text)) {
+      return null;
+    }
+    flushHeadingBreak(self);
+    // The text opens the item's next block, where a leading space indents it.
+    if (self.depthMap[Consts.TAG_PRE] == 0) {
+      int index = 0;
+      while (index < text.length() && Chars.isAsciiWhitespace(text.charAt(index))) {
+        index++;
+      }
+      return text.substring(index);
+    }
+    return text;
+  }
+
+  private static void flushHeadingBreak(ConvertState self) {
+    self.headingBreakPending = false;
+    String separator = "\n\n" + self.listIndent;
+    self.lastContentCacheLen = pushCodeSpanContent(self, separator, true);
+  }
+
+  /**
+   * Inside a list item a heading opens its own block unless a wrapper keeps it inline: after text
+   * on the item's line, even past a space, its {@code #} prefix would stay text. The space that
+   * ended the text goes too, which the reach-back trim keeps before a whitespace-collapsing
+   * element.
+   */
+  private static String openItemHeadingBlock(ConvertState self, String output) {
+    if (self.plainText
+        || self.depthMap[Consts.TAG_PRE] != 0
+        || self.inTableCell()
+        || !startsWithHeadingPrefix(output)
+        || headingKeptInlineInItem(self, true)
+        || opensBlockLine(self, self.buffer.length())) {
+      return output;
+    }
+    trimTrailingSpaces(self);
+    return "\n\n" + self.listIndent + (output == null ? "" : output);
+  }
+
+  /** A heading opens inside a list item: keep its block on its own line. */
+  private static String enterItemHeading(
+      ConvertState self, boolean enterIsLiteral, String output) {
+    if (!enterIsLiteral
+        && output != null
+        && output.startsWith("\n")
+        && !opensBlockLine(self, self.buffer.length())) {
+      trimTrailingSpaces(self);
+    }
+    return openItemHeadingBlock(self, output);
+  }
+
+  /**
+   * A heading entering a list item's pending caption. Materializing the caption already places its
+   * opening emphasis before the heading, so no separator goes inside that inline run.
+   */
+  private static boolean captionHeadingEnter(ConvertState self, int tagId) {
+    if (self.depthMap[Consts.TAG_LI] == 0
+        || tagId < Consts.TAG_H1
+        || tagId > Consts.TAG_H6) {
+      return false;
+    }
+    for (ConvertState.CaptionFrame frame : self.captionFrames) {
+      if (frame.state != ConvertState.CAPTION_COMMITTED) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * At a heading's exit in a list item: only an ATX prefix can take in the text after it. Inside
+   * {@code <pre>} that text is code, and inside a caption the emphasis wrapping it, either of
+   * which a break would split.
+   */
+  private static void oweItemHeadingBreak(ConvertState self, ElementNode node) {
+    if (self.depthMap[Consts.TAG_PRE] != 0) {
+      return;
+    }
+    // The same override the exit resolved: none for a skipped node.
+    boolean enterIsOverridden = false;
+    boolean enterIsHeading = false;
+    if (!node.enterSkipped && self.hasTagOverrides) {
+      TagOverride override = self.overrideForNode(node);
+      String enter = override == null ? null : override.enter();
+      enterIsOverridden = enter != null;
+      enterIsHeading = startsWithHeadingPrefix(enter);
+    }
+    if ((!enterIsOverridden || enterIsHeading) && !headingKeptInlineInItem(self, false)) {
+      if (enterIsHeading) {
+        trimTrailingSpaces(self);
+      }
+      self.headingBreakPending = true;
+    }
+  }
+
+  /**
+   * Whether only a block lead precedes {@code at} on its line: indentation, then optionally a list
+   * marker and its space. Nested items indent past the three spaces a list marker line accepts.
+   */
+  static boolean opensBlockLine(ConvertState self, int at) {
+    StringBuilder bytes = self.buffer;
+    int index = Math.min(at, bytes.length());
+    int gap = 0;
+    while (index > 0 && bytes.charAt(index - 1) == ' ') {
+      index--;
+      gap++;
+    }
+    if (index > 0 && bytes.charAt(index - 1) != '\n') {
+      if (gap == 0) {
+        return false;
+      }
+      char marker = bytes.charAt(index - 1);
+      if (marker == '-' || marker == '*' || marker == '+') {
+        index--;
+      } else if (marker == '.' || marker == ')') {
+        int digits = index - 1;
+        index = digits;
+        while (index > 0 && bytes.charAt(index - 1) >= '0' && bytes.charAt(index - 1) <= '9') {
+          index--;
+        }
+        if (index == digits || digits - index > 9) {
+          return false;
+        }
+      } else {
+        return false;
+      }
+      while (index > 0 && bytes.charAt(index - 1) == ' ') {
+        index--;
+      }
+    }
+    if (index == 0) {
+      return !self.hasFlushedTail() || self.flushedTail[1] == '\n';
+    }
+    return bytes.charAt(index - 1) == '\n';
+  }
+
+  /**
+   * {@link #opensBlockLine} at the buffer end, for a dropped caption's exit. Past its first space
+   * a gap only counts as present, so the answer holds while the bytes before the space run stay
+   * put: a line that empty captions in a row leave untouched is not read again at each exit.
+   */
+  private static boolean captionExitOpensBlockLine(ConvertState self) {
+    int end = self.buffer.length();
+    int start;
+    if (self.captionLineSpacesEnd == end) {
+      start = self.captionLineSpacesStart;
+    } else {
+      start = end;
+      while (start > 0 && self.buffer.charAt(start - 1) == ' ') {
+        start--;
+      }
+      self.captionLineSpacesEnd = end;
+      self.captionLineSpacesStart = start;
+    }
+    if (start == end) {
+      self.captionLineOpensStart = -1;
+      return opensBlockLine(self, end);
+    }
+    if (self.captionLineOpensStart == start) {
+      return self.captionLineOpens;
+    }
+    boolean opens = opensBlockLine(self, start + 1);
+    self.captionLineOpensStart = start;
+    self.captionLineOpens = opens;
+    return opens;
+  }
+
+  /**
+   * Whether the heading at the top of the stack ({@code isEnter}) or just popped stays inline in
+   * its list item: a caption's emphasis wraps it, or a wrapper around it writes delimiters that
+   * pair across its content, which a block break would split. A raw tag ({@code <u>},
+   * {@code <sup>}) or a wrapper that writes nothing ({@code <label>}, {@code <small>}) reads the
+   * same either side of it.
+   */
+  private static boolean headingKeptInlineInItem(ConvertState self, boolean isEnter) {
+    if (!self.captionFrames.isEmpty()) {
+      return true;
+    }
+    int end = self.stack.size() - (isEnter ? 1 : 0);
+    for (int i = 0; i < end; i++) {
+      ElementNode node = self.stack.get(i);
+      if (node.collapsesInnerWhiteSpace && wrapperWritesDelimiters(self, node)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Emphasis, code, strikethrough and quote wrappers, and an override with output of its own,
+   * whose markers are taken as a pair.
+   */
+  private static boolean wrapperWritesDelimiters(ConvertState self, ElementNode node) {
+    if (self.hasTagOverrides) {
+      TagOverride override = self.overrideForNode(node);
+      if (override != null) {
+        String enter = override.enter();
+        String exit = override.exit();
+        if ("".equals(enter) && "".equals(exit)) {
+          return false;
+        }
+        if ((node.tagId != Consts.TAG_SPAN
+                && ((enter != null && !enter.isEmpty()) || (exit != null && !exit.isEmpty())))
+            || inlineMarkerType(self.aliasId(override)) != 0) {
+          return true;
+        }
+      }
+    }
+    return inlineMarkerType(node.tagId) != 0;
+  }
+
   // === Element emitters ===
 
   static void emitEnterSimple(ConvertState self, boolean link) {
@@ -3553,6 +4063,13 @@ final class OutputOps {
       return;
     }
 
+    int headingBreakPrefixLen = 0;
+    if (self.headingBreakPending) {
+      SettledHeadingBreak settled = settleHeadingBreak(self, tagId, output);
+      output = settled.output;
+      headingBreakPrefixLen = settled.prefixLen;
+    }
+
     int outputStart = self.buffer.length();
     writeOutput(self, true, isInline, configuredNewLines, output, false);
 
@@ -3565,6 +4082,11 @@ final class OutputOps {
       int bracketPos = emittedBracket ? bufLen - 1 : bufLen;
       beginLink(self, bracketPos, false, false);
       self.link.bracketEmitted = emittedBracket;
+      if (emittedBracket && headingBreakPrefixLen != 0) {
+        self.link.headingBreakPrefixLen = headingBreakPrefixLen;
+        self.link.startsAtHardBreak =
+            self.hardBreakEnd == bracketPos - self.link.headingBreakPrefixLen;
+      }
       prepareStreamingLink(self, node, emittedBracket);
       if (!self.openMarkers.isEmpty()
           && (self.cleanFlags & ConvertState.CLEAN_EMPTY_LINK_TEXT) == 0
@@ -3777,30 +4299,62 @@ final class OutputOps {
       }
       self.captionFrames.add(frame);
     }
-    boolean captionActive =
-        self.captionBoundary != ConvertState.CAPTION_BOUNDARY_NONE || !self.captionFrames.isEmpty();
-    boolean captionVisibleOutput =
-        captionActive && output != null && Chars.hasVisible(output);
-    boolean defaultInlineMarker =
-        !enterIsLiteral && captionVisibleOutput && inlineMarkerType(tagId) != 0;
-    boolean tentativeCaptionOutput =
-        defaultInlineMarker || (!enterIsLiteral && tagId == Consts.TAG_A);
-    if (captionVisibleOutput || tagId == Consts.TAG_BLOCKQUOTE) {
-      expandDeferredCaptionBreaks(self);
+    // Empty list containers emit nothing. Only an actual item replaces the
+    // quote's pending continuation with list structure.
+    if (quoteBoundaryPending(self)) {
+      output = settleQuoteBoundaryAtEnter(self, tagId, node.isInline, enterIsLiteral, output);
     }
-    boolean consumesCaptionBoundary =
-        (captionVisibleOutput || tagId == Consts.TAG_BLOCKQUOTE)
-            && prepareCaptionBoundary(
-                self, tagId != Consts.TAG_BLOCKQUOTE && tagId != Consts.TAG_LI);
-    if (captionVisibleOutput
-        && (tagId != Consts.TAG_BLOCKQUOTE || enterIsLiteral)) {
-      int mode =
-          captionEnter && enterIsLiteral
-              ? CAPTION_MATERIALIZE_EXPLICIT_COMMIT
-              : (tentativeCaptionOutput
-                  ? CAPTION_MATERIALIZE_TENTATIVE
-                  : CAPTION_MATERIALIZE_COMMIT);
-      materializeCaptionFrames(self, mode);
+    // With no caption or quote state pending, and no blockquote entering, none of
+    // the caption handling below can write or change state, so it is skipped.
+    boolean captionFast =
+        self.captionBoundary == ConvertState.CAPTION_BOUNDARY_NONE
+            && self.captionFrames.isEmpty()
+            && tagId != Consts.TAG_BLOCKQUOTE;
+    boolean structuralQuote = tagId == Consts.TAG_BLOCKQUOTE && !enterIsLiteral;
+    boolean quoteSiblingSeparator = false;
+    boolean captionHeadingEnter = false;
+    boolean consumesCaptionBoundary = false;
+    if (!captionFast) {
+      boolean captionActive =
+          self.captionBoundary != ConvertState.CAPTION_BOUNDARY_NONE
+              || !self.captionFrames.isEmpty();
+      boolean captionVisibleOutput =
+          captionActive && output != null && Chars.hasVisible(output);
+      boolean defaultInlineMarker =
+          !enterIsLiteral && captionVisibleOutput && inlineMarkerType(tagId) != 0;
+      boolean tentativeCaptionOutput =
+          defaultInlineMarker || (!enterIsLiteral && tagId == Consts.TAG_A);
+      boolean quoteParent =
+          self.captionBoundary == ConvertState.CAPTION_BOUNDARY_QUOTE_PARENT;
+      // A sibling quote keeps the separator after a closed quote's content. An
+      // empty quote left the item's opening line, where a blank would end it.
+      quoteSiblingSeparator =
+          quoteParent
+              && structuralQuote
+              && lastOutputByte(self) >= 0
+              && lastOutputByte(self) != '\n';
+      captionHeadingEnter = captionVisibleOutput && captionHeadingEnter(self, tagId);
+      if (captionVisibleOutput || structuralQuote) {
+        expandDeferredCaptionBreaks(self);
+      }
+      if (captionVisibleOutput || structuralQuote) {
+        // An anchor without an href writes nothing, so it cannot carry the boundary.
+        if (captionVisibleOutput && node.isInline && quoteBoundaryPending(self)) {
+          consumesCaptionBoundary = prepareInlineQuoteBoundary(self, enterIsLiteral);
+        } else {
+          consumesCaptionBoundary =
+              prepareCaptionBoundary(self, tagId != Consts.TAG_LI && !structuralQuote);
+        }
+      }
+      if (captionVisibleOutput && (tagId != Consts.TAG_BLOCKQUOTE || enterIsLiteral)) {
+        int mode =
+            captionEnter && enterIsLiteral
+                ? CAPTION_MATERIALIZE_EXPLICIT_COMMIT
+                : (tentativeCaptionOutput
+                    ? CAPTION_MATERIALIZE_TENTATIVE
+                    : CAPTION_MATERIALIZE_COMMIT);
+        materializeCaptionFrames(self, mode);
+      }
     }
     int configuredNewLines =
         quoteAtStart(self) || consumesCaptionBoundary || captionEnter ? 0 : config[0];
@@ -3822,6 +4376,18 @@ final class OutputOps {
 
     if (!self.plainText && ConvertState.isRawHtmlBlockTag(tagId)) {
       enterRawHtmlBoundary(self, enterIsLiteral, output != null, configuredNewLines);
+    }
+
+    int headingBreakPrefixLen = 0;
+    if (self.headingBreakPending) {
+      SettledHeadingBreak settled = settleHeadingBreak(self, tagId, output);
+      output = settled.output;
+      headingBreakPrefixLen = settled.prefixLen;
+    }
+    if (tagId >= Consts.TAG_H1
+        && tagId <= Consts.TAG_H6
+        && self.depthMap[Consts.TAG_LI] > 0) {
+      output = enterItemHeading(self, enterIsLiteral, output);
     }
 
     if (tagId == Consts.TAG_BR
@@ -3887,8 +4453,11 @@ final class OutputOps {
       return;
     }
 
+    boolean rawHtmlQuoteBoundary =
+        self.pendingRawHtmlBoundary && !enterIsLiteral && tagId == Consts.TAG_BLOCKQUOTE;
     int outputStart = self.buffer.length();
-    writeOutput(self, true, node.isInline, configuredNewLines, output, enterIsLiteral);
+    writeOutput(
+        self, true, node.isInline, configuredNewLines, output, enterIsLiteral || captionHeadingEnter);
 
     if (tagId == Consts.TAG_IMG
         && !enterIsLiteral
@@ -3913,9 +4482,8 @@ final class OutputOps {
     }
 
     if (!self.plainText && !enterIsLiteral && tagId == Consts.TAG_BLOCKQUOTE) {
-      boolean rawHtmlQuoteBoundary =
-          self.pendingRawHtmlBoundary && !enterIsLiteral && tagId == Consts.TAG_BLOCKQUOTE;
       if (!self.blockquotes.isEmpty()
+          && !quoteSiblingSeparator
           && endsWith(self.buffer, "\n\n")
           && (!rawHtmlQuoteBoundary || endsWith(self.buffer, "\n\n\n"))) {
         truncateBuffer(self, self.buffer.length() - 1);
@@ -3927,7 +4495,8 @@ final class OutputOps {
         finishRawHtmlBlock(self, ">", false);
       }
       self.blockquotes.add(
-          new ConvertState.BlockquoteFrame(self.buffer.length(), self.listIndent.toString()));
+          new ConvertState.BlockquoteFrame(
+              self.buffer.length(), self.inTableCell() ? "" : self.listIndent.toString()));
     }
 
     if (!enterIsLiteral && tagId == Consts.TAG_CODE) {
@@ -3978,6 +4547,11 @@ final class OutputOps {
         int bracketPos = emittedBracket ? self.buffer.length() - 1 : self.buffer.length();
         beginLink(self, bracketPos, false, rawHtmlLinkOpen);
         self.link.bracketEmitted = emittedBracket;
+        if (emittedBracket && headingBreakPrefixLen != 0) {
+          self.link.headingBreakPrefixLen = headingBreakPrefixLen;
+          self.link.startsAtHardBreak =
+              self.hardBreakEnd == bracketPos - self.link.headingBreakPrefixLen;
+        }
         prepareStreamingLink(self, node, emittedBracket && !exitIsOverridden);
       } else {
         beginLink(self, self.buffer.length(), false, rawHtmlLinkOpen);
@@ -4009,6 +4583,10 @@ final class OutputOps {
     recordEnterMarker(self, markerTag, output, outputStart, keepsMarkers);
     if (!node.isInline && !self.openMarkers.isEmpty()) {
       self.openMarkers.clear();
+    }
+    if (consumesCaptionBoundary
+        && (!node.isInline || tagId == Consts.TAG_IMG || tagId == Consts.TAG_BR)) {
+      self.captionBoundary = ConvertState.CAPTION_BOUNDARY_NONE;
     }
 
     // Clean: remember where the heading text starts so its slug can be collected on exit.
@@ -4053,13 +4631,29 @@ final class OutputOps {
         || (node.enterSkipped
             && (tagId != Consts.TAG_PRE
                 || self.preFenceOwnerDepth != self.depthMap[Consts.TAG_PRE]))) {
+      // A heading's break is owed only inside its item, even one whose markers a
+      // plugin skipped. An excluded item is no part of the output at all.
+      if (tagId == Consts.TAG_LI && !node.excludedFromMarkdown) {
+        self.headingBreakPending = false;
+      }
       self.lastNodeIsInline = isInline;
       return;
     }
     if (self.htmlFormat) {
+      if (tagId == Consts.TAG_LI) {
+        self.headingBreakPending = false;
+      }
       HtmlOutputOps.emitHtmlExit(self, node);
       self.lastNodeIsInline = isInline;
       return;
+    }
+    if (tagId == Consts.TAG_LI) {
+      if (self.captionBoundary == ConvertState.CAPTION_BOUNDARY_QUOTE_PARENT
+          || self.captionBoundary == ConvertState.CAPTION_BOUNDARY_QUOTE_TENTATIVE) {
+        restoreQuoteParentBoundary(self);
+        self.captionBoundary = ConvertState.CAPTION_BOUNDARY_NONE;
+      }
+      self.headingBreakPending = false;
     }
     boolean ownsPreFence = tagId == Consts.TAG_PRE;
     boolean closesOwnPreFence =
@@ -4141,10 +4735,12 @@ final class OutputOps {
       }
     }
 
+    boolean closesQuote =
+        !self.plainText && tagId == Consts.TAG_BLOCKQUOTE && !self.blockquotes.isEmpty();
+    if (closesQuote) {
+      finalizeBlockquote(self);
+    }
     if (!self.plainText && tagId == Consts.TAG_BLOCKQUOTE) {
-      if (!self.blockquotes.isEmpty()) {
-        finalizeBlockquote(self);
-      }
       self.pendingRawHtmlBoundary = false;
     }
 
@@ -4165,7 +4761,14 @@ final class OutputOps {
         self.inHeading = false;
       }
       if (!self.plainText && !self.inTableCell()) {
-        escapeTrailingHeadingHashes(self);
+        // An overridden exit inside a code span has no ATX closing sequence.
+        // Keep its literal hashes, as the override's own handler does in JS.
+        if (!hasOverride || self.codeSpans.isEmpty()) {
+          escapeTrailingHeadingHashes(self);
+        }
+        if (self.depthMap[Consts.TAG_LI] > 0) {
+          oweItemHeadingBreak(self, node);
+        }
       }
     }
 
@@ -4211,8 +4814,10 @@ final class OutputOps {
       if (captionVisibleOutput) {
         expandDeferredCaptionBreaks(self);
         consumesCaptionBoundary =
-            prepareCaptionBoundary(
-                self, tagId != Consts.TAG_BLOCKQUOTE && tagId != Consts.TAG_LI);
+            (isInline && quoteBoundaryPending(self))
+                ? prepareInlineQuoteBoundary(self, hasOverride)
+                : prepareCaptionBoundary(
+                    self, tagId != Consts.TAG_BLOCKQUOTE && tagId != Consts.TAG_LI);
         materializeCaptionFrames(
             self,
             defaultInlineMarker ? CAPTION_MATERIALIZE_TENTATIVE : CAPTION_MATERIALIZE_COMMIT);
@@ -4231,9 +4836,11 @@ final class OutputOps {
     if (captionExit && !self.captionFrames.isEmpty()) {
       ConvertState.CaptionFrame frame = self.captionFrames.remove(self.captionFrames.size() - 1);
       ConvertState.DeferredBreakRun deferredBreaks = frame.deferredBreaks;
+      boolean restoresHeadingBreak = false;
       if (frame.state == ConvertState.CAPTION_PENDING) {
         if (!hasOverride) {
           output = null;
+          restoresHeadingBreak = frame.restoresHeadingBreak;
         }
       } else if (frame.state == ConvertState.CAPTION_TENTATIVE) {
         boolean committed = false;
@@ -4256,12 +4863,17 @@ final class OutputOps {
           }
           if (!hasOverride) {
             output = null;
+            restoresHeadingBreak = frame.restoresHeadingBreak;
           }
         }
       } else {
         captionExitSpacing = frame.spacing[1];
       }
       writeDeferredBreakRun(self, deferredBreaks);
+      // A break the dropped caption left behind already ends the heading's line.
+      if (restoresHeadingBreak && !captionExitOpensBlockLine(self)) {
+        self.headingBreakPending = true;
+      }
     }
 
     int newLines;
@@ -4325,6 +4937,7 @@ final class OutputOps {
         trimTrailingSpaces(self);
         self.hardBreakEnd = self.buffer.length();
       }
+      self.pendingRawHtmlBoundary = false;
     }
 
     int outputStart = self.buffer.length();
@@ -4333,9 +4946,23 @@ final class OutputOps {
     if (consumesCaptionBoundary
         && (!isInline || tagId == Consts.TAG_IMG || tagId == Consts.TAG_BR)) {
       self.captionBoundary = ConvertState.CAPTION_BOUNDARY_NONE;
+    } else if (consumesCaptionBoundary && !captionExit && quoteBoundaryPending(self)) {
+      closeQuoteWrapper(self);
     }
     if (captionExitSpacing > 0) {
       setCaptionBoundaryPending(self, captionExitSpacing);
+    }
+    // Reuse the deferred block boundary: it already ignores invisible output
+    // and supplies list continuation indentation, without taxing plain text.
+    if (closesQuote
+        && !hasOverride
+        && self.depthMap[Consts.TAG_LI] > 0
+        && self.depthMap[Consts.TAG_PRE] == 0
+        && !self.inRawHtmlBlock()
+        && !self.inTableCell()) {
+      self.captionBoundary = ConvertState.CAPTION_BOUNDARY_QUOTE_PARENT;
+      // An HR inside this quote cannot own the parent's deferred separator.
+      self.listRulePending = false;
     }
     settleEmptyTextPending(self, outputStart, false);
 
@@ -4357,6 +4984,9 @@ final class OutputOps {
     if (tagId == Consts.TAG_LI) {
       self.listRulePending = false;
       resolveItemMarker(self, true);
+    }
+    if (tagId == Consts.TAG_A) {
+      endLink(self);
     }
   }
 
@@ -4394,9 +5024,15 @@ final class OutputOps {
       blankAbove = true;
     }
     self.emptyItemHazard = !startsDocument && !blankAbove;
+    self.emptyItemAnswered = false;
     self.emptyItemAfterCr = lineEnding == '\r';
     self.emptyItemLineStart = lineStart;
     self.emptyItemLen = self.buffer.length();
+  }
+
+  /** The marker's line may still get a newline inserted, so it must stay put. */
+  static boolean itemMarkerLineHeld(ConvertState self) {
+    return self.emptyItemHazard && !self.emptyItemAnswered;
   }
 
   static void settleItemMarker(ConvertState self) {
@@ -4417,6 +5053,11 @@ final class OutputOps {
 
   static void resolveItemMarker(ConvertState self, boolean atExit) {
     if (!self.emptyItemHazard) {
+      return;
+    }
+    // The drain may have freed the line since; the answer it saw is final.
+    if (self.emptyItemAnswered) {
+      self.emptyItemHazard = !atExit;
       return;
     }
     int end = Math.min(self.emptyItemLen, self.buffer.length());
@@ -4442,7 +5083,9 @@ final class OutputOps {
       }
     }
     if (!tail.isEmpty() && tail.charAt(0) != '\n' && tail.charAt(0) != '\r') {
-      self.emptyItemHazard = false;
+      // The drain only records that, since the `<li>` exit's hard-break trim reads it.
+      self.emptyItemAnswered = !atExit;
+      self.emptyItemHazard = !atExit;
       return;
     }
     if (!atExit) {
@@ -4469,7 +5112,16 @@ final class OutputOps {
       self.buffer.delete(at, removeEnd);
     }
     self.buffer.insert(at, separator);
-    shiftOffsetsAtOrAfter(self, at, separator.length() - replaced);
+    int inserted = separator.length() - replaced;
+    shiftOffsetsAtOrAfter(self, at, inserted);
+    // Upstream deliberately does not shift blockquote content starts wholesale:
+    // a frame the item opened starts past the line and moves with its content,
+    // or it quotes from the wrong byte. A frame starting at the line stays.
+    for (ConvertState.BlockquoteFrame frame : self.blockquotes) {
+      if (frame.contentStart > at) {
+        frame.contentStart += inserted;
+      }
+    }
     if (breakAtEnd) {
       self.hardBreakEnd = self.buffer.length();
     }
@@ -4601,11 +5253,11 @@ final class OutputOps {
   private static int openLinkHoldFloor(ConvertState self) {
     int floor = Integer.MAX_VALUE;
     if (linkHoldRequired(self, self.link)) {
-      floor = self.link.bracketPos;
+      floor = self.link.bracketPos - self.link.headingBreakPrefixLen;
     }
     for (ConvertState.LinkOutputState parent : self.parentLinks) {
       if (linkHoldRequired(self, parent)) {
-        floor = Math.min(floor, parent.bracketPos);
+        floor = Math.min(floor, parent.bracketPos - parent.headingBreakPrefixLen);
       }
     }
     return floor == Integer.MAX_VALUE ? -1 : floor;
@@ -4710,7 +5362,7 @@ final class OutputOps {
     if (linkFloor >= 0) {
       stableEnd = Math.min(stableEnd, holdBefore(self.buffer, linkFloor));
     }
-    if (self.emptyItemHazard) {
+    if (itemMarkerLineHeld(self)) {
       stableEnd = Math.min(stableEnd, keepTwoBefore(self.buffer, self.emptyItemLineStart));
     }
     if (self.inHeading()) {
@@ -4839,9 +5491,14 @@ final class OutputOps {
         && !Chars.isAsciiWhitespace(self.buffer.charAt(self.buffer.length() - 1))) {
       resolveItemMarker(self, false);
     }
-    if (self.emptyItemHazard) {
+    if (itemMarkerLineHeld(self)) {
       drainEnd =
           Math.min(drainEnd, keepTwoBefore(self.buffer, self.emptyItemLineStart));
+    }
+    // Keep a lead-only line whole: `opensBlockLine` reads back to its start.
+    int leadStart = uncutBlockLeadStart(self, drainEnd, markerTail);
+    if (leadStart >= 0) {
+      drainEnd = Math.min(drainEnd, keepTwoBefore(self.buffer, leadStart));
     }
     if (drainEnd <= 0) {
       return;
@@ -4936,6 +5593,88 @@ final class OutputOps {
     if (self.hardBreakEnd >= 0) {
       self.hardBreakEnd = self.hardBreakEnd >= removed ? self.hardBreakEnd - removed : -1;
     }
+    self.captionLineSpacesStart = 0;
+    self.captionLineSpacesEnd = -1;
+    self.captionLineOpensStart = -1;
+  }
+
+  /**
+   * Start of the line {@code drainEnd} cuts, if no later line was yielded and only a block lead of
+   * at most {@code widest} bytes precedes the cut.
+   */
+  private static int uncutBlockLeadStart(ConvertState self, int drainEnd, int widest) {
+    StringBuilder bytes = self.buffer;
+    int len = bytes.length();
+    if (drainEnd == 0) {
+      return -1;
+    }
+    char endChar = bytes.charAt(drainEnd - 1);
+    if (!(endChar == ' '
+        || endChar == '-'
+        || endChar == '*'
+        || endChar == '+'
+        || endChar == '.'
+        || endChar == ')'
+        || (endChar >= '0' && endChar <= '9'))) {
+      return -1;
+    }
+    // Yielded bytes are final, so a later yielded line keeps this one from ever being read again.
+    int yieldedEnd = Math.max(drainEnd, Math.min(self.lastYieldedLength, len));
+    while (yieldedEnd > drainEnd && Chars.isAsciiWhitespace(bytes.charAt(yieldedEnd - 1))) {
+      yieldedEnd--;
+    }
+    for (int k = drainEnd; k < yieldedEnd; k++) {
+      if (bytes.charAt(k) == '\n') {
+        return -1;
+      }
+    }
+    int floor = Math.max(0, drainEnd - widest);
+    int i = drainEnd;
+    while (i > floor && bytes.charAt(i - 1) == ' ') {
+      i--;
+    }
+    if (i > floor && bytes.charAt(i - 1) != '\n') {
+      char lead = bytes.charAt(i - 1);
+      int marker;
+      if (lead == '-' || lead == '*' || lead == '+') {
+        marker = i - 1;
+      } else if (lead == '.' || lead == ')' || (lead >= '0' && lead <= '9')) {
+        // The cut may land between an ordered marker's digits and its delimiter.
+        int digitsEnd = i - (isAsciiDigit(lead) ? 0 : 1);
+        int at = digitsEnd;
+        while (at > floor && digitsEnd - at < 9 && isAsciiDigit(bytes.charAt(at - 1))) {
+          at--;
+        }
+        if (at == digitsEnd) {
+          return -1;
+        }
+        marker = at;
+      } else {
+        return -1;
+      }
+      i = marker;
+      while (i > floor && bytes.charAt(i - 1) == ' ') {
+        i--;
+      }
+    }
+    if (i < floor) {
+      return -1;
+    }
+    if (i > 0 && bytes.charAt(i - 1) == '\n') {
+      return i;
+    }
+    // `buffer[0]` opens a line before any cut or after one that ended a line.
+    if (i == 0
+        && (self.cutLineLeadKind == ConvertState.CUT_LEAD_UNCUT
+            || (self.cutLineLeadKind == ConvertState.CUT_LEAD_BLANK
+                && self.cutLineLeadIndent == 0))) {
+      return 0;
+    }
+    return -1;
+  }
+
+  private static boolean isAsciiDigit(char c) {
+    return c >= '0' && c <= '9';
   }
 
   /**

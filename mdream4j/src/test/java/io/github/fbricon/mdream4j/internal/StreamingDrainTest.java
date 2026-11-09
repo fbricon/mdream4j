@@ -5,10 +5,12 @@
  */
 package io.github.fbricon.mdream4j.internal;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.fbricon.mdream4j.Clean;
 import io.github.fbricon.mdream4j.Corpus;
+import io.github.fbricon.mdream4j.HtmlToMarkdown;
 import io.github.fbricon.mdream4j.MarkdownStream;
 import io.github.fbricon.mdream4j.Options;
 import io.github.fbricon.mdream4j.OutputFormat;
@@ -71,6 +73,29 @@ class StreamingDrainTest {
       }
     }
     assertTransparent(failures, checks);
+  }
+
+  /**
+   * Regression for a truncated break run at EOF.
+   *
+   * <p>Dropping an empty {@code <code>} right before a nested {@code <li>} rewrote the buffer
+   * behind a deferred {@code <br>} run, leaving the run's end past the live bytes. The final
+   * chunk then held the item marker's line forever and silently dropped the trailing marker.
+   */
+  @Test
+  void streamFinishEmitsTrailingItemAfterDroppedCodeSpan() {
+    String[] inputs = {"><li>:&#32<br></><code><li>", "<li>x<br><li>"};
+    for (String html : inputs) {
+      String oneShot = HtmlToMarkdown.convert(html, Options.defaults());
+      for (int chunk : new int[] {1, 2, 3, 7, html.length()}) {
+        for (boolean disableDrain : new boolean[] {false, true}) {
+          assertEquals(
+              oneShot,
+              stream(html, chunk, Options.defaults(), disableDrain),
+              "chunk=" + chunk + " disableDrain=" + disableDrain + " input=" + escape(html));
+        }
+      }
+    }
   }
 
   @Test
