@@ -1,9 +1,17 @@
 # mdream4j — implementation plan
 
-Status: proposal, 2026-11-02 (rev 2).
-Companion research: [`REPORT.md`](./REPORT.md) (FFM mechanics and measurements).
-Port source: `mdream` npm **2.0.3**, the released state at `55937d7c` (MIT). Note: the
-`v2.0.3` git tag (`a7a8802`) is 66 commits earlier and is **not** the parity target.
+Status: historical design record; proposal dated 2026-11-02 (revs 2–4 below). Current operational
+facts live in [`AGENTS.md`](./AGENTS.md) (rules and commands),
+[`docs/REFERENCE.md`](./docs/REFERENCE.md) (pin, bridge, goldens) and
+[`docs/BENCHMARKS.md`](./docs/BENCHMARKS.md) (results). §14 is the live backlog; §11 is the
+original two-week plan.
+
+Companion research: [`docs/FEASIBILITY.md`](./docs/FEASIBILITY.md) (FFM mechanics and
+measurements).
+Port source: `mdream` 2.0.3 plus the post-release fixes; current parity pin
+[`9ea07b84`](https://github.com/harlan-zw/mdream/commit/9ea07b841c29f7d26ebb4122829ecb3201265bc3).
+The npm `2.0.3` state (`55937d7c`) and the `v2.0.3` tag (`a7a8802`) are earlier and are **not**
+the parity target.
 
 **Rev 2 changes:** byte-identical parity is now a hard requirement; Java **11** is the bytecode
 baseline; **GraalVM native-image** is a hard requirement; consumer analysis for **lemminx** and
@@ -27,7 +35,7 @@ The new constraints settle the architecture:
 
 | Constraint | Consequence |
 |---|---|
-| **Byte-identical to mdream v2.0.3** | Port 1:1, function for function; golden corpus + differential fuzzing |
+| **Byte-identical at the parity pin** | Port 1:1, function for function; golden corpus + reference differentials |
 | **Java 11** | Rules out FFM (needs 22+) and records/sealed/pattern-matching. Hand-written builders. |
 | **GraalVM native-image** | Rules out reflection, ServiceLoader, dynamic proxies, JNI/FFM, runtime resource loading |
 | **lemminx** (Java 11 + native-image) | Smallest real surface (one wrapper class); validates the API and the native-image story |
@@ -96,8 +104,8 @@ prove byte equality and to benchmark "OG mdream" in-process. It is never publish
 
 ### 3.3 The parity contract
 
-**Byte-identical output to mdream `v2.0.3` on the full conformance corpus**, with exactly three
-documented deviations, each covered by a test:
+**Byte-identical output to mdream at the parity pin (`9ea07b84`, 2.0.3 plus post-release fixes)
+on the full conformance corpus**, with exactly three documented deviations, each covered by a test:
 
 1. Unpaired UTF-16 surrogates → U+FFFD (Rust cannot receive them).
 2. `wrapWidth` counts Unicode code points, not UTF-16 units (`codePointCount`).
@@ -189,24 +197,21 @@ mdream4j/
 │   │   ├── MdreamConverter.java       # reusable, thread-safe
 │   │   ├── Options.java               # final class + Builder (Java 11)
 │   │   ├── Clean.java, Plugins.java, Filter.java, Frontmatter.java, Extraction.java,
-│   │   │   TagOverride.java, IsolateMain.java, Tailwind.java
-│   │   ├── OutputFormat.java          # enum
+│   │   │   TagOverride.java, OutputFormat.java
 │   │   ├── MdreamResult.java, ExtractedElement.java
 │   │   ├── Splitter.java, SplitterOptions.java, MarkdownChunk.java, ChunkMetadata.java,
 │   │   │   ChunkLoc.java
 │   │   └── internal/                  # not exported
-│   │       ├── Consts.java, TagHandler.java, Tags.java
-│   │       ├── Entities.java, EntityTable.java
-│   │       ├── Scan.java, Url.java, Selector.java, Tailwind.java
-│   │       ├── Node.java, Attributes.java, NodeStack.java
-│   │       ├── ConvertState.java, ParseOps.java, OutputOps.java,
-│   │       │   HtmlOutputOps.java, PluginOps.java, Buffer.java
+│   │       ├── Attr.java, Attributes.java, Chars.java, Consts.java, TagHandler.java, Tags.java
+│   │       ├── Entities.java, Scan.java, Url.java, Selector.java, ParsedSelector.java
+│   │       ├── ElementNode.java, NodeExtras.java, NodeStack.java
+│   │       ├── ConvertState.java, ParseOps.java, OutputOps.java, HtmlOutputOps.java
+│   │       └── ConverterStream.java, Engine.java, Tailwind.java, TailwindData.java
 │   ├── src/test/java/                 # JUnit 5 (Java 11-compatible)
-│   └── src/test/resources/golden/     # JSONL conformance corpus
-├── mdream4j-reference/            # test-scope, release 25, never published
-├── mdream4j-bench/                # JMH 1.37, one module/profile per contender
-├── mdream4j-cli/                  # optional; hyperfine table
-└── docs/                          # methodology, parity report, ADRs
+│   └── src/test/resources/golden/expected.jsonl
+├── mdream4j-reference/            # test-scope, Java 25, never published
+├── mdream4j-bench/                # JMH, profile-gated, never published
+└── docs/                          # reference, consumers, benchmarks, review
 ```
 
 ### 5.2 Internal representation: `char[]`, not `byte[]`
@@ -259,16 +264,23 @@ A Rust dumper (`mdream-golden`) reads `{id, html, options}` JSONL and writes exp
 4. `streaming_drain.rs` (133), `max_node_bytes.rs` (103), `depth_limit.rs` (27),
    `implied_end_tags.rs` (22), `whitespace_breaks.rs` (19), `splitter.rs` (31)
 
-Output: `golden/*.jsonl`, ~1,100 cases. Regeneration is a maintainer task (`make goldens`).
+Output: `golden/expected.jsonl`, 1,218 cases. Regeneration is a maintainer task (`make goldens`).
 
-### 6.2 Differential fuzzing
+### 6.2 Differential testing
 
-`mdream4j-reference` + Jazzer:
+What is checked in today is differential but not fuzzing: the 1,218-case golden corpus is
+replayed one-shot and at six chunk sizes (`GoldenCorpusTest`, `GoldenStreamingTest`), the
+reference profile adds `CappedParityTest`, the backport scripts provide ad-hoc one-shot/streaming
+diffs, and `ScalingRegressionTest` guards the known quadratic inputs. No Jazzer target exists
+yet; standalone robustness fuzzing is a post-0.1 next step (§14.1).
+
+The fuzzing plan in §14.1 adds these invariants to the differential harness:
 
 - **Reference fuzz**: random/mutated HTML → Java output == Rust output, `truncated` equal.
 - **Streaming invariant**: chunk sizes `{1,2,3,7,64,4096,random}` concatenate to one-shot.
 - **Drain transparency**: port `new_drain_disabled()` and assert on/off equality.
 - **Cap parity**, **overflow parity** (depth 511/512/513, all three overflow modes).
+- **No unchecked exception and no hang** on arbitrary bytes.
 
 Short budget per PR, 30-minute soak nightly. Corpus committed on failure.
 
@@ -308,9 +320,13 @@ text output.
 
 ---
 
-## 7. Benchmark plan
+## 7. Benchmark plan (historical)
 
-### 7.1 Contenders
+Original contender matrix and targets. Current modules and numbers are in
+[`docs/BENCHMARKS.md`](./docs/BENCHMARKS.md); the Tika, CLI and NAPI/JS rows below were dropped,
+so only the eight contenders that exist today are listed there.
+
+### 7.1 Contenders (planned)
 
 | # | Contender | Coordinates / invocation | Isolation |
 |---|---|---|---|
@@ -423,7 +439,7 @@ consumer repositories; this plan only commits to the surface and guarantees they
 | **M4 — Options + plugins** | clean, frontmatter, isolateMain, filter, extraction, tailwind, tagOverrides | 3 weeks |
 | **M5 — Formats + splitter** | text + HTML output, splitter | 2 weeks |
 | **M6 — API freeze + 0.1** | Javadoc, examples, publish `docs/CONSUMERS.md`, OSGi/JPMS verification, 0.1.0 to Central | 1 week |
-| **M7 — Hardening + 1.0** | Jazzer soak, perf tuning, docs, Central 1.0.0 | 3 weeks |
+| **M7 — Hardening + 1.0** | Jazzer soak (§14.1), perf tuning, docs, Central 1.0.0 | 3 weeks |
 
 ≈5 months to a thorough 1.0; a usable 0.1 after M2 (~3 months). Consumer migrations are separate
 efforts in their own repositories and can start as soon as 0.1 is available.
@@ -443,7 +459,8 @@ the instruction to preserve branch order and magic constants.
 
 ### 9.2 Upstream sync
 
-Pin the released `mdream` 2.0.3 state at `55937d7c` (the `v2.0.3` tag is 66 commits earlier).
+Pin the current parity commit `9ea07b84` (2.0.3 plus the post-release fixes; see
+[`docs/REFERENCE.md`](./docs/REFERENCE.md)).
 Quarterly: checkout new tag → regenerate goldens → run Java suite → publish a behaviour diff.
 Adopt one upstream PR per commit. Treat it as a fork with a sync process.
 
@@ -451,26 +468,28 @@ Adopt one upstream PR per commit. Treat it as a fork with a sync process.
 
 ## 10. Build, CI, publishing
 
-- **Toolchain:** JDK 25 compiler, `--release 11`, Maven Wrapper, JUnit 5, AssertJ, JMH 1.37
-  (`-proc:full` on JDK 23+), Jazzer, bnd.
+- **Toolchain:** JDK 25 compiler, `--release 11`, Maven Wrapper, JUnit 5, JMH 1.37
+  (`-proc:full` on JDK 23+), bnd. Jazzer is planned for the separate fuzz harness (§14.1).
 - **CI:** tests on Temurin `{11, 17, 21, 25}` × `{ubuntu, macos, windows}`; JMH on one pinned
-  Linux runner; nightly fuzz; native-image smoke (GraalVM CE 21/25); `mvn -B verify` +
-  checkstyle + `-Xlint:all -Werror`; `jdeps --check`; bnd baseline.
+  Linux runner; nightly fuzz once §14.1 lands; native-image smoke (GraalVM CE 21/25);
+  `mvn -B verify` + checkstyle + `-Xlint:all -Werror`; `jdeps --check`; bnd baseline.
 - **Publishing:** `io.github.fbricon:mdream4j` via Central Publisher Portal,
   `central-publishing-maven-plugin:0.12.0`, sources + javadoc + GPG, immutable GAVs.
 - **Licensing:** MIT + `LICENSE-mdream` with upstream's text verbatim
   (`Copyright (c) 2025 Harlan Wilton`) inside the JAR at `META-INF/`, plus `THIRD-PARTY.md`
-  ("mdream4j is a Java port of mdream v2.0.3, MIT"). No endorsement claims. Do not copy
+  ("mdream4j is an unofficial Java port of mdream, MIT"). No endorsement claims. Do not copy
   remark (Apache-2.0) or flexmark (BSD-2) code.
 
 ---
 
-## 11. Immediate next steps (2 weeks)
+## 11. Initial two-week plan (historical)
+
+This was the starting plan; §14 is the live backlog.
 
 1. **Scaffold**: `git init`, parent POM, wrapper, `module-info`, OSGi headers, CI, licences.
 2. **Reference bridge**: Rust `mdream-reference` cdylib + Java FFM bridge; 100% equality on 8 fixtures.
-3. **Goldens**: dumper → `golden/*.jsonl` (~1,100 cases), checked in.
-4. **Benchmarks**: wire all 11 contenders; publish the baseline on JDK 11 and 25. This also
+3. **Goldens**: dumper → `golden/expected.jsonl` (1,218 cases), checked in.
+4. **Benchmarks**: wire the contenders; publish the baseline on JDK 11 and 25. This also
    produces the first real xberg number (their README figure is vendor-supplied).
 5. **Native smoke**: `native-image` a sample; prove zero config.
 6. **API review**: run the two consumer wrappers against the draft surface on paper (and a throwaway
@@ -484,7 +503,7 @@ Adopt one upstream PR per commit. Treat it as a fork with a sync process.
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | `output.rs` port outruns estimates | High | High | Walking skeleton early; cut M5; goldens per function |
-| Subtle output drift | Medium | High | Reference fuzzing + SHA gate in JMH |
+| Subtle output drift | Medium | High | Reference differentials + SHA gate in JMH |
 | `char[]` slower than expected | Medium | Medium | 2-day spike with kill criterion |
 | Java 11 JIT underperforms 25 | Medium | Medium | Benchmark both; report 11; optimise against 11 |
 | GraalVM needs config after all | Low | Medium | Native smoke from day one; no reflection by design |
@@ -499,7 +518,8 @@ Adopt one upstream PR per commit. Treat it as a fork with a sync process.
 
 1. **GroupId**: decided — `io.github.fbricon:mdream4j`. A future rename is an automated
    find/replace plus a republish; GAVs stay immutable per release.
-2. **Text and HTML output formats**: v1.0 or v1.1? Recommend v1.1 unless a consumer needs them.
+2. **Text and HTML output formats**: decided — both are implemented in 0.1.0
+   (`OutputFormat.TEXT` / `HTML`).
 
 Consumer-specific decisions (lemminx `unescapeJava`, jdt.ls `<dl>`/`sup` handling, migration
 timing, jsoup upgrade) live in [`docs/CONSUMERS.md`](./docs/CONSUMERS.md) §4 and do not block the
@@ -507,9 +527,60 @@ library.
 
 ---
 
+## 14. Next steps
+
+Ordered backlog after 0.1.0. Each item names its acceptance test so it can be picked up without
+re-deriving the design.
+
+### 14.1 Robustness fuzzing (Jazzer)
+
+Status: **not implemented**. The parity work is guarded by the golden corpus, the reference
+probes and `ScalingRegressionTest`; there is no standalone fuzzer, and `AGENTS.md` keeps the
+published module to JUnit-only test dependencies.
+
+Goal: find parser/tokenizer robustness bugs on malformed input — unchecked exceptions, hangs,
+stack overflow, streaming divergence — the class GHSA-m72m-mhq2-9p6c represented for jsoup.
+
+Design:
+
+- New `mdream4j-fuzz/` module, profile-gated with `-Pwith-fuzz` exactly like `mdream4j-bench`,
+  never published and absent from the default reactor. The shipped `mdream4j` artifact and its
+  test classpath stay JUnit-only, so `AGENTS.md` keeps its rule.
+- `com.code-intelligence:jazzer-junit` (0.24.0 was current on Central when this was written),
+  test scope, in that module only. Wire the agent through Surefire `argLine` or run the Jazzer
+  CLI; the profile is not part of `./mvnw verify`.
+- Port the upstream cargo-fuzz targets from
+  `tools/upstream/crates/core/fuzz/fuzz_targets/`: `fuzz_html_to_markdown`, `fuzz_html_grammar`,
+  `fuzz_streaming`, `fuzz_streaming_chunks`, `fuzz_streaming_widths`, `fuzz_options`,
+  `fuzz_streaming_options`, `fuzz_splitter`, `fuzz_fast_paths`.
+- Oracles:
+  - conversion never throws an unchecked exception for any input;
+  - every execution finishes inside a fixed timeout (a hang is a failure);
+  - streamed output at every chunk size equals one-shot output;
+  - `maxNodeBytes` caps hold and `truncated` agrees with the uncapped run;
+  - fast-path on/off agree, and Markdown/TEXT/HTML modes agree where §8.2 says they must.
+- Feed raw bytes decoded as UTF-8 rather than `FuzzedDataProvider.consumeRemainingAsString()`,
+  so malformed sequences and the lone-surrogate deviation are exercised.
+- CI: a short budget per PR (for example 30 s per target) and a 30-minute nightly soak, mirroring
+  `tools/upstream/.github/workflows/fuzz.yml`. Commit minimised inputs under
+  `mdream4j-fuzz/corpus/` when a failure is fixed, and record the seed in the fixing commit.
+
+Acceptance: `./mvnw -Pwith-fuzz verify` runs the targets and a finding fails the build; corpus
+seeds are committed; `AGENTS.md` lists the command and the module's non-published status; the
+pinned upstream commit still matches and the golden corpus is unchanged.
+
+Alternatives considered: jqwik property tests (`net.jqwik:jqwik`) are cheaper to run but have no
+coverage feedback, so they are better suited to semantic differential invariants than to finding
+deep tokenizer states; they can complement Jazzer later without changing this design.
+
+Non-goals: fuzzing is a robustness oracle, not a sanitizer test. It does not cover XSS or the
+"keep sanitizing untrusted HTML" contract in `docs/CONSUMERS.md`.
+
+---
+
 ## Appendix A — Why the earlier FFM verdict changed
 
-`REPORT.md` §0 recommended FFM. Three facts overturned it:
+`docs/FEASIBILITY.md` §0 recommended FFM. Three facts overturned it:
 
 1. `io.xberg:html-to-markdown` already ships that architecture (Java 25 FFM + Rust core +
    per-platform natives), is MIT, actively maintained, and has 15 language bindings. It is not a

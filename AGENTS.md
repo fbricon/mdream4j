@@ -58,8 +58,9 @@ cargo build --release --manifest-path tools/reference/Cargo.toml
 1. **Port, do not invent.** Match [upstream](https://github.com/harlan-zw/mdream)
    control flow, state names and edge-case behaviour exactly. If upstream does
    something odd, reproduce it.
-2. **No runtime dependencies.** JUnit is the only test dependency. Do not add a
-   compile or runtime dependency.
+2. **No runtime dependencies.** In the published `mdream4j` module, JUnit is the
+   only test dependency. Do not add a compile or runtime dependency. Any benchmark
+   or fuzz harness is profile-gated and never published.
 3. **Java 11 only.** The build uses `--release 11`; do not use newer APIs.
 4. **Stay native-image clean.** No reflection, dynamic proxies, JNI in the library,
    or classpath scanning.
@@ -97,17 +98,15 @@ The `mdream-backport` skill is the full runbook. Load
 when syncing an upstream commit, diagnosing a corpus mismatch, or adding a
 differential probe.
 
-Before calling parity work done:
+The skill's **Finish checklist** is authoritative. In this repository it means:
 
-- [ ] `./mvnw -o -pl mdream4j test` passes.
-- [ ] One-shot differential: 0 mismatches over the full corpus.
-- [ ] Streaming differential: 0 mismatches at every chunk size.
-- [ ] `./mvnw -Pwith-reference verify` passes.
+- [ ] `./mvnw -o -pl mdream4j test` and `./mvnw -Pwith-reference verify` pass.
+- [ ] One-shot and streaming differentials report 0 mismatches.
 - [ ] No debug instrumentation left behind.
 - [ ] Upstream pin, `README.md` and `docs/REFERENCE.md` agree.
 
-When bumping the pin, also update `docs/REVIEW-2026-11.md` and regenerate the
-goldens in the same change.
+When bumping the pin, regenerate the goldens in the same change.
+`docs/REVIEW-2026-11.md` is a dated snapshot; do not rewrite it.
 
 ## Commits
 

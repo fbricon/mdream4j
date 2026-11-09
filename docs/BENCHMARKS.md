@@ -1,7 +1,8 @@
 # Benchmarks
 
 JMH benchmarks for mdream4j and its contenders live in `mdream4j-bench/`. They are
-profile-gated: `./mvnw verify` never builds or runs them.
+profile-gated: `./mvnw verify` never builds or runs them. This file is the canonical
+record of the results; `README.md` summarises it.
 
 ## Contenders
 

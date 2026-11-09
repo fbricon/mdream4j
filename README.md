@@ -11,8 +11,9 @@ A fast, dependency-free HTML to Markdown converter for Java, ported from
 - **JPMS** module and **OSGi** bundle metadata
 - One-shot and streaming conversion, GFM output
 
-Status: **0.1.0**. The conversion core is ported and verified against the Rust reference on a
-1218-case corpus, for markdown, text, HTML, metadata and streaming at six chunk sizes.
+Status: **0.1.0-SNAPSHOT** (in development). The conversion core is ported and verified against the
+Rust reference on a 1,218-case corpus, for markdown, text, HTML, metadata and streaming at six
+chunk sizes.
 
 ## Usage
 
@@ -111,6 +112,7 @@ within 0.46–1.4× of the Rust reference.
 
 Notes for the intended consumers (lemminx and eclipse.jdt.ls) are in
 [`docs/CONSUMERS.md`](docs/CONSUMERS.md). They are not library commitments.
+
 ## License
 
 MIT. mdream4j is an unofficial Java port of

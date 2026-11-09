@@ -1,6 +1,8 @@
 # mdream4j — Pure-Java port vs. FFM binding to the Rust engine
 
-Research report, 2026-11-02. All local measurements were taken on this machine:
+Feasibility study, 2026-11-02. **The §0 verdict is superseded by the addendum below**; the
+adopted decision is in [`PLAN.md`](../PLAN.md) §2 and Appendix A. All local measurements were
+taken on this machine:
 macOS 27.0.1 / Apple Silicon (arm64), Temurin JDK 25.0.4.1, Rust 1.99.1, mdream 2.0.3
 (`crates/core`, release profile with `lto = true`, `strip = true`, `codegen-units = 1`).
 Benchmarks are best-of-N wall-clock loops, not JMH; treat them as order-of-magnitude
@@ -13,7 +15,7 @@ outputs were diffed against the upstream Rust results.
 > depends on Jackson and serialises options/results through JSON on every call. So FFM is not an
 > open niche, and its "faster to ship" advantage is smaller than assumed. The recommendation is now
 > **port the core to pure Java 25, and keep FFM only as a test-only reference bridge and benchmark baseline**.
-> See [`PLAN.md`](./PLAN.md) §2 and Appendix A for the revised decision matrix.
+> See [`PLAN.md`](../PLAN.md) §2 and Appendix A for the revised decision matrix.
 
 ---
 

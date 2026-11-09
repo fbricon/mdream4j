@@ -8,7 +8,7 @@ It has three jobs:
 
 1. Generate the checked-in golden file
    (`mdream4j/src/test/resources/golden/expected.jsonl`).
-2. Differential fuzzing: Java output must equal the reference output.
+2. Differential testing: Java output must equal the reference output on the corpus and probes.
 3. Benchmark baseline ("OG mdream") in the same JVM.
 
 ## Upstream pin
@@ -30,6 +30,8 @@ cd tools/upstream
 git fetch --depth 1 origin 9ea07b841c29f7d26ebb4122829ecb3201265bc3
 git checkout 9ea07b84
 ```
+
+This section is the canonical record of the pin; `README.md` and `AGENTS.md` link here.
 
 ## Build
 
