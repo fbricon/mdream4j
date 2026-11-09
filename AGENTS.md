@@ -15,8 +15,9 @@ and streamed, with three documented deviations:
 - `wrapWidth` counts code points, not bytes;
 - `maxNodeBytes` counts UTF-8 bytes.
 
-The current upstream pin is `9ea07b84`, described in
-[`docs/REFERENCE.md`](docs/REFERENCE.md).
+The current upstream pin is
+[`9ea07b84`](https://github.com/harlan-zw/mdream/commit/9ea07b841c29f7d26ebb4122829ecb3201265bc3),
+described in [`docs/REFERENCE.md`](docs/REFERENCE.md).
 
 ## Commands
 
@@ -48,14 +49,15 @@ cargo build --release --manifest-path tools/reference/Cargo.toml
 | `mdream4j/src/test/resources/golden/expected.jsonl` | Generated golden corpus, loaded from the test classpath. |
 | `mdream4j-reference/` | Test-only bridge to the Rust reference; never published. |
 | `mdream4j-bench/` | Benchmark harness; profile-gated, never published. |
-| `tools/upstream/` | Read-only upstream submodule at the parity pin. |
-| `tools/reference/` | Rust bridge plus the `mdream-golden` and `stream-golden` dumpers. |
+| `tools/upstream/` | Read-only [upstream mdream](https://github.com/harlan-zw/mdream) submodule at the parity pin. |
+| `tools/reference/` | Bridge to the [Rust reference](https://github.com/harlan-zw/mdream) plus the `mdream-golden` and `stream-golden` dumpers. |
 | `tools/corpus/` | Corpus extractor and the extracted `cases.jsonl` inputs. |
 
 ## Non-negotiable rules
 
-1. **Port, do not invent.** Match upstream control flow, state names and edge-case
-   behaviour exactly. If upstream does something odd, reproduce it.
+1. **Port, do not invent.** Match [upstream](https://github.com/harlan-zw/mdream)
+   control flow, state names and edge-case behaviour exactly. If upstream does
+   something odd, reproduce it.
 2. **No runtime dependencies.** JUnit is the only test dependency. Do not add a
    compile or runtime dependency.
 3. **Java 11 only.** The build uses `--release 11`; do not use newer APIs.
