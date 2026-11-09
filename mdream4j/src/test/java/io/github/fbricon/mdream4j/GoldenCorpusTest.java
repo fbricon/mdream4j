@@ -21,8 +21,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * Differential test against {@code golden/expected.jsonl}, the reference outputs recorded from the
- * upstream Rust core.
+ * Differential test against {@code /golden/expected.jsonl} on the test classpath, the reference
+ * outputs recorded from the upstream Rust core.
  *
  * <p>Each corpus case is its own JUnit invocation, named by corpus id, so a mismatch points at the
  * failing case and the remaining cases still run. Every format is checked for every case: the test

@@ -5,44 +5,41 @@
  */
 package io.github.fbricon.mdream4j;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Loads {@code golden/expected.jsonl} for the differential tests. */
+/** Loads {@code golden/expected.jsonl} from the test classpath for the differential tests. */
 public final class Corpus {
+
+  private static final String CASES_RESOURCE = "/golden/expected.jsonl";
 
   private Corpus() {}
 
   public static List<Map<String, Object>> loadCases() throws IOException {
-    Path corpus = findCorpus();
+    InputStream in = Corpus.class.getResourceAsStream(CASES_RESOURCE);
+    if (in == null) {
+      throw new IllegalStateException("missing " + CASES_RESOURCE + " on the test classpath");
+    }
     List<Map<String, Object>> cases = new ArrayList<>();
-    for (String line : Files.readAllLines(corpus, StandardCharsets.UTF_8)) {
-      if (line.isEmpty()) {
-        continue;
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+      for (String line = reader.readLine(); line != null; line = reader.readLine()) {
+        if (line.isEmpty()) {
+          continue;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> entry = (Map<String, Object>) new Json(line).parse();
+        cases.add(entry);
       }
-      @SuppressWarnings("unchecked")
-      Map<String, Object> entry = (Map<String, Object>) new Json(line).parse();
-      cases.add(entry);
     }
     return cases;
-  }
-
-  static Path findCorpus() {
-    Path here = Paths.get("").toAbsolutePath();
-    for (Path dir = here; dir != null; dir = dir.getParent()) {
-      Path candidate = dir.resolve("golden").resolve("expected.jsonl");
-      if (Files.isRegularFile(candidate)) {
-        return candidate;
-      }
-    }
-    throw new IllegalStateException("golden/expected.jsonl not found above " + here);
   }
 
   /** Builds the case's options for Markdown output. */
