@@ -1,7 +1,8 @@
 # Reference bridge
 
-`mdream4j-reference` is a **test-only** bridge to the upstream Rust mdream core. It is never
-published and the library never loads it.
+`mdream4j-reference` is a **test-only** bridge to the upstream
+[Rust mdream core](https://github.com/harlan-zw/mdream). It is never published and the library
+never loads it.
 
 It has three jobs:
 
@@ -12,10 +13,16 @@ It has three jobs:
 
 ## Upstream pin
 
-`tools/upstream` is a shallow submodule at **`9ea07b84`**, `mdream` 2.0.3 plus the thirteen
-post-release fixes merged on `main` (issues #386, #420, #445–#451 and the workspace
-dependency refresh). The npm `2.0.3` package state is `55937d7c`; the `v2.0.3` git tag
-(`a7a8802`) is 66 commits earlier and is **not** the parity target.
+[`tools/upstream`](../tools/upstream) is a shallow submodule of
+[mdream](https://github.com/harlan-zw/mdream) at
+**[`9ea07b84`](https://github.com/harlan-zw/mdream/commit/9ea07b841c29f7d26ebb4122829ecb3201265bc3)**,
+the [2.0.3 release](https://github.com/harlan-zw/mdream/releases/tag/v2.0.3) plus the thirteen
+post-release fixes merged on `main` (issues #386, #420, #445–#451 and the workspace dependency
+refresh). The npm `2.0.3` package state is
+[`55937d7c`](https://github.com/harlan-zw/mdream/commit/55937d7ccf3d3b19de393504ed6a569be9440e46);
+the [`v2.0.3` git tag](https://github.com/harlan-zw/mdream/releases/tag/v2.0.3)
+([`a7a8802`](https://github.com/harlan-zw/mdream/commit/a7a88026a221126b7e21c579ed41dd2ebb6cb809))
+is 66 commits earlier and is **not** the parity target.
 
 ```shell
 git submodule update --init --depth 1 tools/upstream

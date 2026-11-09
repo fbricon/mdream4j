@@ -3,7 +3,9 @@
 A fast, dependency-free HTML to Markdown converter for Java, ported from
 [mdream](https://github.com/harlan-zw/mdream).
 
-- **Byte-identical to upstream mdream at `9ea07b84`** (2.0.3 plus the post-release fixes)
+- **Byte-identical to [upstream mdream](https://github.com/harlan-zw/mdream) at
+  [`9ea07b84`](https://github.com/harlan-zw/mdream/commit/9ea07b841c29f7d26ebb4122829ecb3201265bc3)**
+  (2.0.3 plus the post-release fixes)
 - **Java 11** bytecode and API floor, **zero runtime dependencies**
 - **GraalVM native-image** clean: no configuration, no reflection, no FFM
 - **JPMS** module and **OSGi** bundle metadata
@@ -87,7 +89,8 @@ first conversion in 0.9 ms.
 Requires JDK 11 or newer. The build compiles with `--release 11` and uses the checked-in golden
 corpus, so no Rust, Node or submodule checkout is needed.
 
-The differential tests against the Rust reference are opt-in:
+The differential tests against the [Rust reference](https://github.com/harlan-zw/mdream) are
+opt-in:
 
 ```shell
 git submodule update --init --depth 1 tools/upstream
@@ -110,5 +113,6 @@ Notes for the intended consumers (lemminx and eclipse.jdt.ls) are in
 [`docs/CONSUMERS.md`](docs/CONSUMERS.md). They are not library commitments.
 ## License
 
-MIT. mdream4j is an unofficial Java port of mdream, which is MIT licensed and
-copyright (c) 2025 Harlan Wilton. See `LICENSE` and `LICENSE-mdream`.
+MIT. mdream4j is an unofficial Java port of
+[mdream](https://github.com/harlan-zw/mdream), which is MIT licensed and copyright (c) 2025 Harlan
+Wilton. See `LICENSE` and `LICENSE-mdream`.
