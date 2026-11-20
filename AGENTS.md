@@ -16,8 +16,8 @@ and streamed, with three documented deviations:
 - `maxNodeBytes` counts UTF-8 bytes.
 
 The current upstream pin is
-[`9ea07b84`](https://github.com/harlan-zw/mdream/commit/9ea07b841c29f7d26ebb4122829ecb3201265bc3),
-described in [`docs/REFERENCE.md`](docs/REFERENCE.md).
+[`63bfc0a`](https://github.com/harlan-zw/mdream/commit/63bfc0a6d86b5165833fd353d415415bf55cd561),
+the 2.2.0 release, described in [`docs/REFERENCE.md`](docs/REFERENCE.md).
 
 ## Commands
 
@@ -65,7 +65,7 @@ cargo build --release --manifest-path tools/reference/Cargo.toml
 4. **Stay native-image clean.** No reflection, dynamic proxies, JNI in the library,
    or classpath scanning.
 5. **Never hand-edit `expected.jsonl`.** Generate it from the Rust reference with
-   `make goldens`. A test asserts the corpus does not shrink (currently 1,218 cases).
+   `make goldens`. A test asserts the corpus does not shrink (currently 1,364 cases).
 6. **No debug residue.** Remove `MD_DBG`, `System.err`, `eprintln!` and temporary
    tracing before committing.
 7. **Keep parity in both modes.** Any output change must hold for one-shot conversion

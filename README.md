@@ -4,15 +4,15 @@ A fast, dependency-free HTML to Markdown converter for Java, ported from
 [mdream](https://github.com/harlan-zw/mdream).
 
 - **Byte-identical to [upstream mdream](https://github.com/harlan-zw/mdream) at
-  [`9ea07b84`](https://github.com/harlan-zw/mdream/commit/9ea07b841c29f7d26ebb4122829ecb3201265bc3)**
-  (2.0.3 plus the post-release fixes)
+  [`63bfc0a`](https://github.com/harlan-zw/mdream/commit/63bfc0a6d86b5165833fd353d415415bf55cd561)**
+  (the 2.2.0 release)
 - **Java 11** bytecode and API floor, **zero runtime dependencies**
 - **GraalVM native-image** clean: no configuration, no reflection, no FFM
 - **JPMS** module and **OSGi** bundle metadata
 - One-shot and streaming conversion, GFM output
 
 Status: **0.1.0-SNAPSHOT** (in development). The conversion core is ported and verified against the
-Rust reference on a 1,218-case corpus, for markdown, text, HTML, metadata and streaming at six
+Rust reference on a 1,364-case corpus, for markdown, text, HTML, metadata and streaming at six
 chunk sizes.
 
 ## Usage

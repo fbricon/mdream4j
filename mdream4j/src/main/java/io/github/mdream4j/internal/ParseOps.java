@@ -326,6 +326,28 @@ final class ParseOps {
             && (!self.hasTailwind || parent.tailwind() == null));
   }
 
+  /**
+   * A blank that opens an inline element can be the only word separator, whether the element writes
+   * a delimiter, like {@code <strong>}, or nothing, like a {@code <span>}. The output decides where
+   * it goes, or that it writes nothing. Outside line: only blanks reach it, and inlined it slows
+   * every text node.
+   */
+  private static boolean keepsLeadingBlank(ConvertState self) {
+    return !self.stack.isEmpty() && self.stack.get(self.stack.size() - 1).isInline;
+  }
+
+  /**
+   * A whitespace-only blank at an inline fragment root is a word separator the output places.
+   * Mirrors the JS engine's {@code inlineAtRoot}.
+   */
+  private static boolean inlineAtRoot(ConvertState self, boolean containsNonWhitespace) {
+    return !containsNonWhitespace
+        && self.firstBlockParentIndex == 0
+        && self.blockParentIndices.isEmpty()
+        && !self.stack.isEmpty()
+        && self.stack.get(0).isInline;
+  }
+
   /** {@link #processTextBufferPiece} for {@link #textNodeFastPathOk} nodes. */
   static void processPlainTextNode(ConvertState self, StringBuilder textBuffer) {
     boolean containsNonWhitespace = self.textBufferContainsNonWhitespace;
@@ -347,13 +369,14 @@ final class ParseOps {
       excludesTextNodes = true;
     }
 
-    if (!containsNonWhitespace && childTextNodeIndex == 0 && self.stack.size() != 0) {
+    boolean isLeadingBlank =
+        !containsNonWhitespace && childTextNodeIndex == 0 && self.stack.size() != 0;
+    if (isLeadingBlank && (self.isHtml() || !keepsLeadingBlank(self))) {
       return;
     }
     if (textBuffer.length() == 0) {
       return;
     }
-
     int firstBlockParentIndex = self.firstBlockParentIndex;
     int firstBlockChildTextCount =
         firstBlockParentIndex >= 0 ? self.stack.get(firstBlockParentIndex).childTextNodeIndex : 0;
@@ -363,7 +386,9 @@ final class ParseOps {
             && (firstBlockParentIndex >= 0
                 || self.buffer.length() == 0
                 || self.buffer.charAt(self.buffer.length() - 1) == '\n');
-    if (containsWhitespace && isFirstTextInBlock) {
+    if (containsWhitespace
+        && ((isFirstTextInBlock && !inlineAtRoot(self, containsNonWhitespace))
+            || (!isLeadingBlank && self.leadsLinkLabel()))) {
       int start = 0;
       while (start < textBuffer.length() && Scan.isWhitespace(textBuffer.charAt(start))) {
         start++;
@@ -372,6 +397,9 @@ final class ParseOps {
         textBuffer.delete(0, start);
         resetTextBufferBytes(self, textBuffer);
       }
+    }
+    if (isLeadingBlank && textBuffer.length() == 0) {
+      return;
     }
 
     // Only raw HTML leaves decoded references unprotected.
@@ -382,6 +410,16 @@ final class ParseOps {
         resetTextBufferBytes(self, textBuffer);
       }
       self.hasEncodedHtmlEntity = false;
+    }
+
+    // The output places a leading blank as a word separator; the counters stay
+    // as if it were dropped, so it is no content of the element.
+    if (isLeadingBlank) {
+      if (!excludesTextNodes) {
+        OutputOps.placeLeadingBlank(self);
+      }
+      clearTextBuffer(self, textBuffer);
+      return;
     }
 
     if (!excludesTextNodes) {
@@ -436,7 +474,9 @@ final class ParseOps {
     boolean inPreTag = self.inPre;
     int childTextNodeIndex = parent != null ? parent.childTextNodeIndex : 0;
 
-    if (!inPreTag && !containsNonWhitespace && childTextNodeIndex == 0 && self.stack.size() != 0) {
+    boolean isLeadingBlank =
+        !inPreTag && !containsNonWhitespace && childTextNodeIndex == 0 && self.stack.size() != 0;
+    if (isLeadingBlank && (self.isHtml() || !keepsLeadingBlank(self))) {
       clearTextBuffer(self, textBuffer);
       return;
     }
@@ -461,7 +501,9 @@ final class ParseOps {
       isFirstTextInBlock = !self.htmlFormat || self.flushedTail[1] == '\n';
     }
 
-    if (containsWhitespace && isFirstTextInBlock) {
+    if (containsWhitespace
+        && ((isFirstTextInBlock && !inlineAtRoot(self, containsNonWhitespace))
+            || (!isLeadingBlank && !inPreTag && self.leadsLinkLabel()))) {
       int start = 0;
       while (start < textBuffer.length()) {
         char c = textBuffer.charAt(start);
@@ -485,6 +527,10 @@ final class ParseOps {
       }
     }
 
+    if (isLeadingBlank && textBuffer.length() == 0) {
+      return;
+    }
+
     if (self.hasEncodedHtmlEntity) {
       boolean protect =
           !inTitle
@@ -497,6 +543,16 @@ final class ParseOps {
         resetTextBufferBytes(self, textBuffer);
       }
       self.hasEncodedHtmlEntity = false;
+    }
+
+    // The output places a leading blank as a word separator; the counters stay
+    // as if it were dropped, so it is no content of the element.
+    if (isLeadingBlank) {
+      if (!excludesTextNodes) {
+        OutputOps.placeLeadingBlank(self);
+      }
+      clearTextBuffer(self, textBuffer);
+      return;
     }
 
     String text = textBuffer.toString();
@@ -692,14 +748,18 @@ final class ParseOps {
     if (!isBuiltin && !tagName.startsWith("#")) {
       budget.charge(Scan.utf8Length(tagName));
     }
+    // Read after the mask: the other order costs every start tag a spill.
+    int attrMask = self.attrMask(handler);
+    boolean selfClosing = tagIsSelfClosing(self, tagName, tagId, isBuiltin, handler);
     Scan.TagScan scan =
-        Scan.processTagAttributes(chunk, position, handler, self.attrMask(handler), budget, self.attrScratch);
+        Scan.processTagAttributes(chunk, position, selfClosing, attrMask, budget, self.attrScratch);
     if (!scan.complete) {
       self.pendingStart =
           new ConvertState.PendingStartTag(
               isBuiltin ? null : tagName,
               tagId,
               isBuiltin,
+              selfClosing,
               scan.carry,
               self.attrScratch);
       self.attrScratch = new Attributes();
@@ -707,6 +767,55 @@ final class ParseOps {
     }
     return applyOpeningTag(
         self, tagName, tagId, isBuiltin, scan.newPosition, scan.selfClosing, scan.overflow);
+  }
+
+  /**
+   * Whether a start tag of this element has no content. An {@code isSelfClosing} override decides;
+   * without one the handler does, aliases included.
+   */
+  static boolean tagIsSelfClosing(
+      ConvertState self,
+      String tagName,
+      int tagId,
+      boolean isBuiltin,
+      TagHandler handler) {
+    boolean selfClosing = handler != null && handler.isSelfClosing;
+    if (self.hasTagOverrides) {
+      return overriddenSelfClosing(self, tagName, tagId, isBuiltin, selfClosing);
+    }
+    return selfClosing;
+  }
+
+  /**
+   * The override branch of {@link #tagIsSelfClosing}. A built-in name is looked up by id: the
+   * source spelling can be {@code <BR>}, and the id of an aliased custom name would find the
+   * target's override instead.
+   */
+  private static boolean overriddenSelfClosing(
+      ConvertState self,
+      String tagName,
+      int tagId,
+      boolean isBuiltin,
+      boolean handlerValue) {
+    TagOverride override =
+        isBuiltin && tagId >= 0
+            ? self.overrideForId(tagId)
+            : self.overrideForName(tagName, -1);
+    if (override == null || override.selfClosing() == null) {
+      return handlerValue;
+    }
+    return override.selfClosing();
+  }
+
+  /**
+   * Only a void handler skips the depth-limit recovery. An override that makes any other tag void
+   * needs no skip, and one that reopens this tag needs it.
+   */
+  static boolean endTagIsVoid(ConvertState self, String tagName, int tagId, boolean isBuiltin) {
+    TagHandler handler = tagId >= 0 ? Tags.getTagHandler(tagId) : null;
+    return handler != null
+        && handler.isSelfClosing
+        && tagIsSelfClosing(self, tagName, tagId, isBuiltin, handler);
   }
 
   static OpeningTagResult applyOpeningTag(
@@ -1058,16 +1167,23 @@ final class ParseOps {
       self.blockParentIndices.add(idx);
     }
 
-    if (tagId == Consts.TAG_OL) {
-      String startValue = tag.attributes.getBit(Consts.ATTR_START);
-      Long parsedStart =
-          startValue == null
-              ? null
-              : parseBoundedU32(startValue, ConvertState.MAX_ORDERED_START);
-      self.orderedStarts.add(parsedStart == null ? null : parsedStart.intValue());
+    if (tagId == Consts.TAG_OL || tagId == Consts.TAG_UL) {
+      boolean ordered = tagId == Consts.TAG_OL;
+      if (ordered) {
+        String startValue = tag.attributes.getBit(Consts.ATTR_START);
+        Long parsedStart =
+            startValue == null
+                ? null
+                : parseBoundedU32(startValue, ConvertState.MAX_ORDERED_START);
+        self.orderedStarts.add(parsedStart == null ? null : parsedStart.intValue());
+      }
       self.listItemCounts.add(0);
-    } else if (tagId == Consts.TAG_UL) {
-      self.listItemCounts.add(0);
+      // A skipped node writes nothing and takes no part, as its events take
+      // none in the JS engine. Lists are blocks unless an override makes one
+      // inline, and the close takes the same test, so push and pop pair up.
+      if (!tag.isInline || self.hasTagOverrides) {
+        pushListMarker(self, ordered, skipNode);
+      }
     } else if (tagId == Consts.TAG_LI) {
       if (parentIndex >= 0) {
         int parentTag = self.stack.get(parentIndex).tagId;
@@ -1129,6 +1245,19 @@ final class ParseOps {
       for (int i = 0; i < width; i++) {
         self.listIndent.append(' ');
       }
+      boolean excluded = li.excludedFromMarkdown;
+      if (width != 0 && !excluded) {
+        if (self.hasTagOverrides) {
+          OutputOps.noteItemWithOverrides(self);
+        } else if (!self.listMarkers.isEmpty()) {
+          ConvertState.ListMarker marker =
+              self.listMarkers.get(self.listMarkers.size() - 1);
+          marker.written = marker.selected;
+          self.lastItemStar = marker.selected == '*';
+        } else {
+          self.lastItemStar = false;
+        }
+      }
     }
 
     self.hasEncodedHtmlEntity = false;
@@ -1137,6 +1266,7 @@ final class ParseOps {
         && self.stack.get(self.stack.size() - 1).isNonNesting
         && !selfClosing) {
       self.inNonNesting = true;
+      self.rawTextBodyRead = false;
     }
 
     if (!selfClosing) {
@@ -1360,6 +1490,7 @@ final class ParseOps {
     boolean nodeExcluded = node.excludedFromMarkdown;
     boolean nodeEnterSkipped = node.enterSkipped;
     int nodeChildTextIndex = node.childTextNodeIndex;
+    boolean nodeIsInline = node.isInline;
 
     if (self.hiddenSinceDepth == nodeDepth) {
       self.hiddenSinceDepth = -1;
@@ -1439,6 +1570,12 @@ final class ParseOps {
           if (nodeTagId == Consts.TAG_LI) {
             popListIndent(self);
           }
+          if ((nodeTagId == Consts.TAG_OL
+                  || nodeTagId == Consts.TAG_UL
+                  || nodeTagId == Consts.TAG_BLOCKQUOTE)
+              && (!nodeIsInline || self.hasTagOverrides)) {
+            popListMarker(self, nodeTagId);
+          }
         }
         self.depth--;
         self.hasEncodedHtmlEntity = false;
@@ -1474,6 +1611,12 @@ final class ParseOps {
       if (nodeTagId == Consts.TAG_LI) {
         popListIndent(self);
       }
+      if ((nodeTagId == Consts.TAG_OL
+              || nodeTagId == Consts.TAG_UL
+              || nodeTagId == Consts.TAG_BLOCKQUOTE)
+          && (!nodeIsInline || self.hasTagOverrides)) {
+        popListMarker(self, nodeTagId);
+      }
     }
 
     self.inNonNesting =
@@ -1493,6 +1636,36 @@ final class ParseOps {
       if (noIndent) {
         OutputOps.flushSettledBlockquoteLines(self);
       }
+    }
+  }
+
+  /** Opens the marker entry of a {@code <ul>}/{@code <ol>}. */
+  private static void pushListMarker(ConvertState self, boolean ordered, boolean skipNode) {
+    int marker =
+        skipNode ? (ordered ? '.' : '-') : OutputOps.nextListMarker(self, ordered);
+    self.listMarkers.add(new ConvertState.ListMarker(marker));
+  }
+
+  /**
+   * Closes what {@link #pushListMarker} opened for the same element, or ends the run of a list
+   * inside the quote that just closed.
+   */
+  private static void popListMarker(ConvertState self, int id) {
+    if (id == Consts.TAG_UL || id == Consts.TAG_OL) {
+      // An empty list writes nothing, leaving the one before it in place.
+      if (!self.listMarkers.isEmpty()) {
+        ConvertState.ListMarker marker =
+            self.listMarkers.remove(self.listMarkers.size() - 1);
+        if (marker.written != 0) {
+          self.siblingListMarker = marker.written;
+          self.siblingListDepth = self.depthMap[Consts.TAG_LI];
+          self.siblingListQuotes = self.blockquotes.size();
+          self.listGapFrom = self.buffer.length();
+        }
+      }
+    } else if (self.siblingListQuotes > self.blockquotes.size()) {
+      // The quote's frame is gone, and the list before it was inside.
+      self.siblingListMarker = 0;
     }
   }
 
@@ -1774,9 +1947,7 @@ final class ParseOps {
     }
 
     if (self.overflowSameNameDepth > 0) {
-      TagHandler handler = tagId >= 0 ? Tags.getTagHandler(tagId) : null;
-      boolean isSelfClosing = handler != null && handler.isSelfClosing;
-      if (isSelfClosing) {
+      if (endTagIsVoid(self, name, tagId, isBuiltin)) {
         self.justClosedTag = true;
         return true;
       }
@@ -1884,7 +2055,13 @@ final class ParseOps {
       }
       return;
     }
-    if (!result.selfClosing && !content.isEmpty()) {
+    if (result.selfClosing) {
+      closeNode(self);
+      self.justClosedTag = true;
+      return;
+    }
+
+    if (!content.isEmpty()) {
       ElementNode parent = self.stack.size() == 0 ? null : self.stack.get(self.stack.size() - 1);
       boolean excluded =
           parent != null && (parent.excludedFromMarkdown || parent.excludesTextNodes);
@@ -1898,9 +2075,7 @@ final class ParseOps {
         parent.childTextNodeIndex++;
       }
     }
-    if (!result.selfClosing) {
-      closeNode(self);
-    }
+    closeNode(self);
   }
 
   // === Main scanner ===
@@ -2100,7 +2275,7 @@ final class ParseOps {
       Scan.TagResume resume =
           Scan.resumeTagAttributes(
               chunk,
-              handler != null && handler.isSelfClosing,
+              pending.selfClosing,
               self.attrMask(handler),
               pending.carry,
               pending.attrs);
@@ -2275,6 +2450,10 @@ final class ParseOps {
           continue;
         }
 
+        if (self.inNonNesting) {
+          self.rawTextBodyRead = true;
+        }
+
         if (cc == '&') {
           self.hasEncodedHtmlEntity = true;
         }
@@ -2417,6 +2596,14 @@ final class ParseOps {
           }
           if (currentName != null && Chars.asciiEqualsIgnoreCase(currentName, peekName)) {
             completeTextNode(self, textBuffer);
+            // Skipped raw text ends the whitespace run before it. Text an
+            // extraction read instead ends it too, so the output does not
+            // depend on the selectors.
+            if (self.rawTextBodyRead
+                && !self.stack.isEmpty()
+                && self.stack.get(self.stack.size() - 1).excludesTextNodes) {
+              self.lastCharWasWhitespace = false;
+            }
             if (self.heldOutputExceeded) {
               return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
             }
@@ -2483,9 +2670,22 @@ final class ParseOps {
           carryBounded = true;
           break;
         }
-        completeTextNode(self, textBuffer);
-        if (self.heldOutputExceeded) {
-          return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+        if (chunkLength - i < 9
+            && Chars.tailIsAsciiCaseInsensitivePrefixOf("<!doctype", chunk, i)) {
+          runStart = i;
+          carry = true;
+          carryBounded = true;
+          break;
+        }
+        // A comment becomes a DOM node. A DOCTYPE in content is ignored without
+        // one, so like a bogus comment it only ends the character reference.
+        if (cdata || Chars.startsWith(chunk, i, "<!--")) {
+          completeTextNode(self, textBuffer);
+          if (self.heldOutputExceeded) {
+            return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
+          }
+        } else {
+          sealTextRun(self, textBuffer);
         }
         runStart = i;
         if (cdata) {
@@ -2503,7 +2703,9 @@ final class ParseOps {
           discardDeclaration(self, chunk.substring(i));
           break;
         }
-      } else if (next == '/') {
+      } else if (next == '/'
+          && i + 2 < chunkLength
+          && (Chars.isAsciiAlphabetic(chunk.charAt(i + 2)) || chunk.charAt(i + 2) == '>')) {
         completeTextNode(self, textBuffer);
         if (self.heldOutputExceeded) {
           return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
@@ -2524,11 +2726,15 @@ final class ParseOps {
           discardEndTag = result.nameEnded;
           break;
         }
-      } else if (next == '?') {
-        completeTextNode(self, textBuffer);
-        if (self.heldOutputExceeded) {
-          return dropAfterHeldOutputExceeded(self, textBuffer, chunkLength);
-        }
+      } else if (next == '/' && i + 2 == chunkLength) {
+        // `</` at the chunk end is an end tag or a bogus comment.
+        runStart = i;
+        carry = true;
+        carryBounded = true;
+        break;
+      } else if (next == '/' || next == '?') {
+        // Bogus comments end at the first `>`, even inside quotes.
+        sealTextRun(self, textBuffer);
         runStart = i;
         int end = chunk.indexOf('>', i);
         if (end < 0) {
@@ -2726,7 +2932,31 @@ final class ParseOps {
     String tail = textBuffer.substring(cut);
     textBuffer.setLength(cut);
     resetTextBufferBytes(self, textBuffer);
+    List<Integer> tailSeals = null;
+    if (!self.entitySeals.isEmpty()) {
+      int split = 0;
+      while (split < self.entitySeals.size() && self.entitySeals.get(split) <= cut) {
+        split++;
+      }
+      tailSeals = new ArrayList<>(self.entitySeals.size() - split);
+      for (int i = split; i < self.entitySeals.size(); i++) {
+        tailSeals.add(self.entitySeals.get(i) - cut);
+      }
+      self.entitySeals.subList(split, self.entitySeals.size()).clear();
+      if (split > 0) {
+        endReferencesAtSeals(self, textBuffer);
+      }
+    }
     processTextBufferPiece(self, textBuffer, false);
+    if (tailSeals != null) {
+      self.entitySeals.clear();
+      self.entitySeals.addAll(tailSeals);
+    }
+    // Piece boundaries depend on content, so settle the marker here as well as
+    // at token boundaries before charging output that still cannot stream.
+    if (self.emptyItemHazard) {
+      OutputOps.settleItemMarker(self);
+    }
     // A blank link's text can outgrow the cap within a single run.
     checkHeldOutput(self);
     self.lastNodeIsInline = true;
@@ -2816,6 +3046,7 @@ final class ParseOps {
   private static int dropAfterHeldOutputExceeded(
       ConvertState self, StringBuilder textBuffer, int chunkLength) {
     clearTextBuffer(self, textBuffer);
+    self.entitySeals.clear();
     self.pendingStart = null;
     self.pendingTag = null;
     self.discard = ConvertState.Discard.none();
@@ -2854,9 +3085,33 @@ final class ParseOps {
     if (self.heldBreakBytes > cap) {
       return true;
     }
+    // An unresolved item marker pins its line even when no quote or link does.
+    // Settlement may still be blocked by an open inline construct or whitespace.
+    // Fragment cleaning retains the whole document anyway, as for a quote.
+    if (!self.retainsWholeDocument() && OutputOps.itemMarkerLineHeld(self)) {
+      int start = self.emptyItemLineStart;
+      // Code bounds and drops its own held content. Charge only the prefix
+      // before it, so that exhausting code can still retain following nodes.
+      int end;
+      if (!self.codeSpans.isEmpty()) {
+        end = self.codeSpans.get(0).outputStart;
+      } else if (self.codeFence != null) {
+        end = self.codeFence.outputStart;
+      } else {
+        end = self.buffer.length();
+      }
+      if (end - start > cap) {
+        return true;
+      }
+    }
     int len = self.buffer.length();
     if (len <= cap) {
       return false;
+    }
+    // A closing delimiter moves this whole run, so streaming holds all of it.
+    int verticalTabStart = OutputOps.verticalTabHoldStart(self);
+    if (verticalTabStart >= 0 && len - verticalTabStart > cap) {
+      return true;
     }
     int floor = len;
     // A link holds while its text is blank, since its close may still drop it.
@@ -2906,7 +3161,7 @@ final class ParseOps {
     if (!self.codeSpans.isEmpty()) {
       best = Math.min(best, self.codeSpans.get(0).outputStart);
     }
-    if (self.emptyItemHazard) {
+    if (OutputOps.itemMarkerLineHeld(self)) {
       best = Math.min(best, self.emptyItemLineStart);
     }
     return best == Integer.MAX_VALUE ? null : best;
@@ -3038,10 +3293,132 @@ final class ParseOps {
     return end;
   }
 
+  /**
+   * Marks the end of the run as the end of a DOM text node: the token discarded there splits the
+   * text without the separator a new node adds.
+   */
+  private static void sealTextRun(ConvertState self, StringBuilder textBuffer) {
+    int at = textBuffer.length();
+    // Only a `&` before the token can start a reference that reaches past it.
+    if (self.hasEncodedHtmlEntity
+        && at != 0
+        && (self.entitySeals.isEmpty()
+            || self.entitySeals.get(self.entitySeals.size() - 1).intValue() != at)) {
+      self.entitySeals.add(at);
+    }
+  }
+
+  /**
+   * Ends the character reference left open at each seal, so the decode that follows reads the text
+   * on each side of a discarded token apart. The run keeps its source bytes until here, which is
+   * what the node cap counts.
+   */
+  private static void endReferencesAtSeals(ConvertState self, StringBuilder textBuffer) {
+    if (self.entitySeals.isEmpty()) {
+      return;
+    }
+    List<Integer> seals = new ArrayList<>(self.entitySeals);
+    self.entitySeals.clear();
+    String text = textBuffer.toString();
+    StringBuilder ended = new StringBuilder(text.length() + 4 * seals.size());
+    int from = 0;
+    for (int seal : seals) {
+      int at = Math.min(seal, text.length());
+      String segment = text.substring(from, at);
+      int amp = openReferenceStart(segment);
+      if (amp >= 0) {
+        ended.append(segment, 0, amp);
+        pushEndedReference(ended, segment.substring(amp), self.entityBuffer);
+      } else {
+        ended.append(segment);
+      }
+      from = at;
+    }
+    ended.append(text, from, text.length());
+    textBuffer.setLength(0);
+    textBuffer.append(ended);
+    resetTextBufferBytes(self, textBuffer);
+  }
+
+  /**
+   * Start of the character reference that text appended after the run could still extend: a final
+   * {@code &} followed only by a name, or by {@code #} and digits.
+   */
+  private static int openReferenceStart(String run) {
+    int amp = run.lastIndexOf('&');
+    if (amp < 0) {
+      return -1;
+    }
+    int i = amp + 1;
+    if (i < run.length() && run.charAt(i) == '#') {
+      i++;
+      if (i < run.length() && (run.charAt(i) == 'x' || run.charAt(i) == 'X')) {
+        i++;
+        for (; i < run.length(); i++) {
+          if (!isAsciiHexDigit(run.charAt(i))) {
+            return -1;
+          }
+        }
+      } else {
+        for (; i < run.length(); i++) {
+          if (!(run.charAt(i) >= '0' && run.charAt(i) <= '9')) {
+            return -1;
+          }
+        }
+      }
+      return amp;
+    }
+    for (; i < run.length(); i++) {
+      if (!Chars.isAsciiAlphanumeric(run.charAt(i))) {
+        return -1;
+      }
+    }
+    return amp;
+  }
+
+  private static boolean isAsciiHexDigit(char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+  }
+
+  /**
+   * Writes {@code reference}, an open one from {@link #openReferenceStart}, so it decodes as it
+   * does alone and takes no byte from the text written after it.
+   */
+  private static void pushEndedReference(
+      StringBuilder out, String reference, StringBuilder scratch) {
+    if (reference.startsWith("&#")) {
+      String rest = reference.substring(2);
+      if (rest.startsWith("x") || rest.startsWith("X")) {
+        rest = rest.substring(1);
+      }
+      // Digits run to the first non-digit, and a `;` there is part of the reference.
+      if (!rest.isEmpty()) {
+        out.append(reference).append(';');
+        return;
+      }
+    }
+    if (Entities.decodeInto(reference, false, false, scratch)) {
+      for (int i = 0; i < scratch.length(); i++) {
+        char ch = scratch.charAt(i);
+        if (ch == '&') {
+          out.append("&amp;");
+        } else {
+          out.append(ch);
+        }
+      }
+    } else {
+      out.append("&amp;");
+      out.append(reference, 1, reference.length());
+    }
+  }
+
   static void completeTextNode(ConvertState self, StringBuilder textBuffer) {
     self.textRunNextFlush = ConvertState.TEXT_RUN_FLUSH_THRESHOLD;
     boolean exhausted = self.textNodeExhausted;
     if (textBuffer.length() > 0) {
+      if (!self.entitySeals.isEmpty()) {
+        endReferencesAtSeals(self, textBuffer);
+      }
       processTextBuffer(self, textBuffer);
       clearTextBuffer(self, textBuffer);
     } else if (exhausted) {

@@ -18,7 +18,7 @@ class ScanTest {
     Attributes out = new Attributes();
     Scan.TagScan scan =
         Scan.processTagAttributes(
-            attrs + ">", 0, null, mask, new Scan.AttrBudget(0), out);
+            attrs + ">", 0, false, mask, new Scan.AttrBudget(0), out);
     assertTrue(scan.complete, attrs);
     return out;
   }
@@ -131,7 +131,7 @@ class ScanTest {
     String html = "a href=\"x\">rest";
     Attributes attrs = new Attributes();
     Scan.TagScan scan =
-        Scan.processTagAttributes(html, 1, null, Consts.ATTR_ALL, new Scan.AttrBudget(0), attrs);
+        Scan.processTagAttributes(html, 1, false, Consts.ATTR_ALL, new Scan.AttrBudget(0), attrs);
     assertTrue(scan.complete);
     assertFalse(scan.selfClosing);
     assertEquals("rest", html.substring(scan.newPosition));
@@ -143,7 +143,7 @@ class ScanTest {
     Attributes attrs = new Attributes();
     Scan.TagScan scan =
         Scan.processTagAttributes(
-            "a href=\"x", 1, null, Consts.ATTR_ALL, new Scan.AttrBudget(0), attrs);
+            "a href=\"x", 1, false, Consts.ATTR_ALL, new Scan.AttrBudget(0), attrs);
     assertFalse(scan.complete);
     assertFalse(attrs.iterator().hasNext());
   }
@@ -153,7 +153,7 @@ class ScanTest {
     String html = "a href=\"x>y\">rest";
     Attributes attrs = new Attributes();
     Scan.TagScan scan =
-        Scan.processTagAttributes(html, 1, null, Consts.ATTR_ALL, new Scan.AttrBudget(0), attrs);
+        Scan.processTagAttributes(html, 1, false, Consts.ATTR_ALL, new Scan.AttrBudget(0), attrs);
     assertTrue(scan.complete);
     assertEquals("x>y", attrs.get("href"));
     assertEquals("rest", html.substring(scan.newPosition));
@@ -177,11 +177,11 @@ class ScanTest {
       Attributes extracted = new Attributes();
       Scan.TagScan withAttrs =
           Scan.processTagAttributes(
-              html, 1, null, Consts.ATTR_ALL, new Scan.AttrBudget(0), extracted);
+              html, 1, false, Consts.ATTR_ALL, new Scan.AttrBudget(0), extracted);
       Attributes bare = new Attributes();
       Scan.TagScan withoutAttrs =
           Scan.processTagAttributes(
-              html, 1, null, Consts.ATTR_NONE, new Scan.AttrBudget(0), bare);
+              html, 1, false, Consts.ATTR_NONE, new Scan.AttrBudget(0), bare);
       assertTrue(withAttrs.complete, html);
       assertEquals(end, withAttrs.newPosition, html);
       assertEquals(withAttrs.complete, withoutAttrs.complete, html);
@@ -209,14 +209,14 @@ class ScanTest {
       String html = attrs + ">";
       Attributes whole = new Attributes();
       Scan.TagScan wholeScan =
-          Scan.processTagAttributes(html, 0, null, Consts.ATTR_ALL, new Scan.AttrBudget(0), whole);
+          Scan.processTagAttributes(html, 0, false, Consts.ATTR_ALL, new Scan.AttrBudget(0), whole);
       assertTrue(wholeScan.complete, attrs);
       for (int split = 1; split < html.length(); split++) {
         Attributes chunked = new Attributes();
         Scan.AttrBudget budget = new Scan.AttrBudget(0);
         Scan.TagScan first =
             Scan.processTagAttributes(
-                html.substring(0, split), 0, null, Consts.ATTR_ALL, budget, chunked);
+                html.substring(0, split), 0, false, Consts.ATTR_ALL, budget, chunked);
         if (first.complete) {
           assertEquals(wholeScan.newPosition, first.newPosition, attrs + " @ " + split);
           assertSamePairs(whole, chunked, attrs + " @ " + split);

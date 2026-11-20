@@ -54,6 +54,11 @@ final class ConvertState {
   boolean pendingRawHtmlBoundary;
   int depth;
   boolean hasEncodedHtmlEntity;
+  /**
+   * Offsets in {@link #parseTextBuffer} where a discarded token split the run: a character
+   * reference left open there must end, so the decode reads the text on each side apart.
+   */
+  final List<Integer> entitySeals = new ArrayList<>(4);
   boolean lastCharWasWhitespace = true;
   boolean textBufferContainsWhitespace;
   boolean textBufferContainsNonWhitespace;
@@ -68,6 +73,11 @@ final class ConvertState {
   boolean justClosedTag;
   boolean isFirstTextInElement;
   boolean inNonNesting;
+  /**
+   * Body bytes of the open raw-text element took the general text path, which leaves the whitespace
+   * run open after a whitespace byte.
+   */
+  boolean rawTextBodyRead;
   boolean rawtextEndTagPending;
   int scriptDataState = SCRIPT_DATA;
   boolean inPre;
@@ -164,14 +174,76 @@ final class ConvertState {
   int lastTextNodeIndex;
   boolean hasLastTextNode;
   boolean lastNodeIsInline;
+  /** Text output: the last output was an image's text, so the next text owes it a separator. */
+  boolean imageTextPending;
+  /** A block boundary wrote the newlines after the last text, so a later trim keeps them. */
+  boolean breakAfterLastText;
   boolean pendingInlineWhitespace;
+
+  /**
+   * That separator is a blank that opened an inline element, or one an empty pair took along and
+   * gave back, so it is written on its own.
+   */
+  boolean pendingLeadingBlank;
+
+  /**
+   * The pending separator was trimmed from a closed inline element, written in front of a pair,
+   * and given back when the pair turned out empty. It stood in the output, so only a line end
+   * takes it.
+   */
+  boolean pendingPairSeparator;
+
+  /**
+   * A decoded blank joined the pending separator a blank that opened an inline element owes. It
+   * is content, so only a line end takes it.
+   */
+  boolean pendingDecodedBlank;
+
+  /** The separator at {@link #pendingSpaceEnd} was trimmed from a closed inline element. */
+  boolean pendingSpaceTrimmed;
+
+  /** Stream position after the space the current element's enter wrote for a pending separator. */
+  int pendingSpaceEnd = Integer.MAX_VALUE;
+
+  /**
+   * The current element's enter wrote no space for a pending separator because its own output
+   * starts with one.
+   */
+  boolean pendingSpaceOwned;
+
+  /** Stream position after the last separator written on its own. */
+  int separatorEnd = Integer.MAX_VALUE;
+
+  /** The cached run follows a separator written on its own. */
+  boolean cacheFollowsSeparator;
+
+  /** Open markers a block writing nothing closed inside. */
+  int silentMarkers;
+
+  /** Each open inline element's literal {@code tagOverrides} opener end, with its depth. */
+  final List<int[]> literalOpenerEnds = new ArrayList<>();
+
+  /** Buffer bytes drained so far; a stream position is this plus a buffer index. */
+  int drained;
+
   boolean streaming;
   final List<LinkOutputState> parentLinks = new ArrayList<>();
   LinkOutputState link = new LinkOutputState();
   final List<OpenMarker> openMarkers = new ArrayList<>();
+  /** The emphasis mark an exit closed just before the next text, so text must not touch it. */
+  int pendingEmphasis;
   final List<CodeSpanState> codeSpans = new ArrayList<>();
+
+  /** Depth of the raw {@code <code>} owner whose text is code, or -1 outside one. */
+  int rawCodeOwnerDepth = -1;
   final List<StreamingBreakRun> streamingBreakRuns = new ArrayList<>();
   CodeFenceState codeFence;
+  /**
+   * A fence was written where a parser may not read it as one: opened after text on its line, or
+   * for a {@code <pre>} inside inline content. Every later fence may then be read with the
+   * opposite parity, so open fences no longer prove code.
+   */
+  boolean fencesUnreliable;
   final List<BlockquoteFrame> blockquotes = new ArrayList<>(4);
   int blockquoteLineScannedTo;
   int blockquoteLineEnd;
@@ -184,6 +256,40 @@ final class ConvertState {
   final List<Integer> listIndentWidths = new ArrayList<>(8);
   final List<Integer> orderedStarts = new ArrayList<>();
   final List<Integer> listItemCounts = new ArrayList<>();
+
+  /** Marker characters of each open {@code <ul>}/{@code <ol>}, innermost last. */
+  final List<ListMarker> listMarkers = new ArrayList<>(8);
+
+  /**
+   * Last marker character of the list that last closed with items, or 0 once visible output
+   * leaving the buffer, or the close of a quote around it, ends its run.
+   */
+  int siblingListMarker;
+
+  /** {@code <li>} depth that list closed at: a list opening at another one is no sibling. */
+  int siblingListDepth;
+
+  /** Quote frames open around that list. */
+  int siblingListQuotes;
+
+  /** Buffer offset where output after that list may turn visible. */
+  int listGapFrom;
+
+  /** The latest item marker is {@code *}, where a rule on its line reads {@code * ***}. */
+  boolean lastItemStar;
+
+  /** Marker characters of an open list. */
+  static final class ListMarker {
+    /** Character the built-in enter of its items writes. */
+    int selected;
+
+    /** Character the latest marker in the list actually used, or 0 before an item wrote one. */
+    int written;
+
+    ListMarker(int selected) {
+      this.selected = selected;
+    }
+  }
 
   boolean preFencePending;
   int preFencePendingDepth;
@@ -223,7 +329,18 @@ final class ConvertState {
   final List<HtmlFrame> htmlFrames = new ArrayList<>(4);
 
   int lastYieldedLength;
+  /**
+   * The emphasis closers that end the output, one right after the other, as {@code [start, end]}.
+   * An opener of the same delimiter written next would touch its closer, which CommonMark reads as
+   * one run, so the pair is reopened.
+   */
+  final List<int[]> closedMarkers = new ArrayList<>(2);
   boolean hasStreamedOutput;
+  /**
+   * Whether a drain has removed output. One that cut only document-leading whitespace, which the
+   * start trim never yields, leaves the buffer at the output start still.
+   */
+  boolean drainedContent;
   final char[] flushedTail = {'\n', '\n'};
   int bufferStartColumn;
   boolean preserveLeadingWhitespace;
@@ -421,6 +538,11 @@ final class ConvertState {
 
   boolean inTableCell() {
     return depthMap[Consts.TAG_TD] > 0 || depthMap[Consts.TAG_TH] > 0;
+  }
+
+  /** Whether the open link's {@code [} ends the output, so text written now leads its label. */
+  boolean leadsLinkLabel() {
+    return link.open && link.bracketEmitted && link.bracketPos + 1 == buffer.length();
   }
 
   boolean inHeading() {
@@ -697,9 +819,17 @@ final class ConvertState {
     boolean holdReleased;
     boolean emptyTextPending;
     boolean bracketEmitted;
+    boolean rewritesBracket;
     boolean open;
     int beginDepth;
     boolean startsAtHardBreak;
+    /**
+     * The pending emphasis closers this link's {@code [} and its close cancelled. The opener is
+     * recorded for cleaners that unwrap links; the close only for {@code clean.fragments}, which
+     * may remove both again.
+     */
+    int closerBefore;
+    int closerAfter;
     /** Bytes before the link bracket owned by a pending heading break. */
     int headingBreakPrefixLen;
 
@@ -713,9 +843,12 @@ final class ConvertState {
       holdReleased = false;
       emptyTextPending = false;
       bracketEmitted = false;
+      rewritesBracket = false;
       open = false;
       beginDepth = 0;
       startsAtHardBreak = false;
+      closerBefore = 0;
+      closerAfter = 0;
       headingBreakPrefixLen = 0;
     }
 
@@ -729,9 +862,12 @@ final class ConvertState {
       holdReleased = other.holdReleased;
       emptyTextPending = other.emptyTextPending;
       bracketEmitted = other.bracketEmitted;
+      rewritesBracket = other.rewritesBracket;
       open = other.open;
       beginDepth = other.beginDepth;
       startsAtHardBreak = other.startsAtHardBreak;
+      closerBefore = other.closerBefore;
+      closerAfter = other.closerAfter;
       headingBreakPrefixLen = other.headingBreakPrefixLen;
     }
   }
@@ -741,7 +877,33 @@ final class ConvertState {
     int contentStart;
     int kind;
     boolean startsAtHardBreak;
+    /** The pending closer this opener cleared, back in force if the pair drops. */
+    int pending;
     boolean restoresHeadingBreak;
+    /** A word separator sits right before the opener, moved there or written for a pending one. */
+    boolean followsSeparator;
+    /** That separator was trimmed from a closed inline element. */
+    boolean separatorTrimmed;
+    /** Openers in the contiguous emphasis run this one ends, itself included. */
+    int runLen = 1;
+    /**
+     * The delimiter length if the pair continues the one before it. Its opener would have touched
+     * that closer, so neither was written and the pair cannot be dropped as empty. Zero otherwise.
+     */
+    int reopened;
+    /**
+     * The delimiter length if the reopened pair was written out again because a pair of its own
+     * delimiter opened right inside it.
+     */
+    int unmerged;
+    /** An entity-decoded blank is all this code-like span holds so far. */
+    boolean decodedBlank;
+    /** A span around this one holds such a blank. */
+    boolean blankOutside;
+    /**
+     * Where vertical-tab-only text first kept it open ({@code -1} if never); charged to the cap.
+     */
+    int verticalTabStart = -1;
   }
 
   static final class CodeSpanState {
@@ -773,6 +935,7 @@ final class ConvertState {
 
   static final class BlockquoteFrame {
     int contentStart;
+    int itemSeparatorLen;
     final String listIndent;
 
     BlockquoteFrame(int contentStart, String listIndent) {
@@ -807,6 +970,7 @@ final class ConvertState {
     int tentativeOutputStart;
     int tentativeContentStart;
     boolean tentativeRestoreSpace;
+    boolean tentativeRestorePendingWhitespace;
   }
 
   static final class DeferredBreakRun {
@@ -838,13 +1002,29 @@ final class ConvertState {
     int linkEnd;
     final String fragment;
     final boolean hasTitle;
+    /**
+     * Pending emphasis closers cancelled by the {@code [} and by the {@code ](} close. When a
+     * broken link loses its wrappers, the closer is adjacent to the next byte again and needs the
+     * same numeric reference as without the link.
+     */
+    final int bracketCloser;
+    final int textCloser;
 
-    FragmentLink(int bracketStart, int textEnd, int linkEnd, String fragment, boolean hasTitle) {
+    FragmentLink(
+        int bracketStart,
+        int textEnd,
+        int linkEnd,
+        String fragment,
+        boolean hasTitle,
+        int bracketCloser,
+        int textCloser) {
       this.bracketStart = bracketStart;
       this.textEnd = textEnd;
       this.linkEnd = linkEnd;
       this.fragment = fragment;
       this.hasTitle = hasTitle;
+      this.bracketCloser = bracketCloser;
+      this.textCloser = textCloser;
     }
   }
 
@@ -852,14 +1032,22 @@ final class ConvertState {
     final String customName;
     final int tagId;
     final boolean isBuiltin;
+    /** Fixed for the whole tag, so it is decided once when the scan parks. */
+    final boolean selfClosing;
     final Scan.TagCarry carry;
     Attributes attrs;
 
     PendingStartTag(
-        String customName, int tagId, boolean isBuiltin, Scan.TagCarry carry, Attributes attrs) {
+        String customName,
+        int tagId,
+        boolean isBuiltin,
+        boolean selfClosing,
+        Scan.TagCarry carry,
+        Attributes attrs) {
       this.customName = customName;
       this.tagId = tagId;
       this.isBuiltin = isBuiltin;
+      this.selfClosing = selfClosing;
       this.carry = carry;
       this.attrs = attrs;
     }

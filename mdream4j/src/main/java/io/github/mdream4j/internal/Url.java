@@ -28,6 +28,12 @@ public final class Url {
     "utm_", "fbclid", "gclid", "mc_eid", "msclkid", "oly_"
   };
 
+  /**
+   * Longest {@code <base href>} adopted, in bytes, after resolution. Every relative URL repeats the
+   * base, so an unbounded one multiplies the output by its length.
+   */
+  static final int MAX_BASE_HREF_LEN = 2048;
+
   private Url() {}
 
   /**
@@ -87,8 +93,8 @@ public final class Url {
     return false;
   }
 
-  /** Strips leading/trailing C0 controls and spaces, as the URL parser does. */
-  private static String trimUrlC0(String href) {
+  /** {@code href} without the leading and trailing C0 controls and spaces the URL parser strips. */
+  public static String trimUrl(String href) {
     int len = href.length();
     int start = 0;
     while (start < len && href.charAt(start) <= ' ') {
@@ -98,7 +104,7 @@ public final class Url {
     while (end > start && href.charAt(end - 1) <= ' ') {
       end--;
     }
-    return href.substring(start, end);
+    return start == 0 && end == len ? href : href.substring(start, end);
   }
 
   /**
@@ -113,7 +119,7 @@ public final class Url {
   public static boolean isEmptyLinkHref(String href) {
     // Leading and trailing C0 controls and spaces are stripped. UTF-8
     // continuation bytes are all >= 0x80, so this cannot split a character.
-    String rest = trimUrlC0(href);
+    String rest = trimUrl(href);
     if (rest.isEmpty()) {
       return false;
     }
@@ -135,7 +141,7 @@ public final class Url {
 
   /** Whether {@code src} is a {@code data:} URL, with the same preprocessing as {@link #isEmptyLinkHref}. */
   public static boolean isDataUrl(String src) {
-    return schemeMatches(trimUrlC0(src), "data:");
+    return schemeMatches(trimUrl(src), "data:");
   }
 
   private static boolean isSchemeChar(char b) {
@@ -158,7 +164,7 @@ public final class Url {
 
   /** Whether a URL is safe to emit into an HTML href or src attribute. */
   public static boolean isSafeHtmlUrl(String href, boolean image) {
-    String rest = trimUrlC0(href);
+    String rest = trimUrl(href);
     if (rest.isEmpty()) {
       return false;
     }
@@ -423,6 +429,18 @@ public final class Url {
    * strip non-alnum except -_.
    */
   public static String slugifyHeading(String text) {
+    return slugifyHeadingText(text, false);
+  }
+
+  /**
+   * Slug of a heading's Markdown output. A closer reference the converter wrote ({@code
+   * **b!**&#99;}) reads as its character, as it renders, so the slug matches the heading's text.
+   */
+  public static String slugifyMarkdownHeading(String text) {
+    return slugifyHeadingText(text, true);
+  }
+
+  private static String slugifyHeadingText(String text, boolean closerReferences) {
     // Strip inline markdown formatting from heading text
     // Remove [text](url) -> text, strip *_`~
     byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
@@ -522,8 +540,12 @@ public final class Url {
             int parenClose = indexOf(bytes, ')', closeAbs + 2, len);
             if (parenClose >= 0) {
               // Extract link text only
-              cleaned.append(
-                  new String(bytes, i + 1, closeAbs - (i + 1), StandardCharsets.UTF_8));
+              if (closerReferences) {
+                pushLinkText(cleaned, bytes, i + 1, closeAbs);
+              } else {
+                cleaned.append(
+                    new String(bytes, i + 1, closeAbs - (i + 1), StandardCharsets.UTF_8));
+              }
               i = parenClose + 1;
               continue;
             }
@@ -532,6 +554,15 @@ public final class Url {
         i += 1;
       } else if (bytes[i] == '*' || bytes[i] == '_' || bytes[i] == '`' || bytes[i] == '~') {
         i += 1;
+      } else if (bytes[i] == '&' && closerReferences) {
+        int[] reference = closerReferenceAt(bytes, i);
+        if (reference != null) {
+          cleaned.append((char) reference[0]);
+          i += reference[1];
+        } else {
+          cleaned.append((char) (bytes[i] & 0xff));
+          i += 1;
+        }
       } else {
         cleaned.append((char) (bytes[i] & 0xff));
         i += 1;
@@ -564,6 +595,80 @@ public final class Url {
       slug.deleteCharAt(slug.length() - 1);
     }
     return slug.toString();
+  }
+
+  /**
+   * The ASCII letter or digit a closer reference the converter wrote at {@code at} spells, with the
+   * reference's length. The converter writes {@code &#N;} in plain decimal right after an emphasis
+   * or strikethrough closer; source text never leaves that unescaped, since its {@code &} is
+   * written as {@code \&}.
+   *
+   * @return {@code {byte, length}}, or {@code null}
+   */
+  private static int[] closerReferenceAt(byte[] bytes, int at) {
+    if (at == 0
+        || (bytes[at - 1] != '*' && bytes[at - 1] != '~')
+        || headingIsEscaped(bytes, at - 1)
+        || at + 1 >= bytes.length
+        || bytes[at + 1] != '#'
+        || at + 2 >= bytes.length
+        || bytes[at + 2] < '1'
+        || bytes[at + 2] > '9') {
+      return null;
+    }
+    int value = 0;
+    int end = at + 2;
+    while (end < at + 5 && end < bytes.length && bytes[end] >= '0' && bytes[end] <= '9') {
+      value = value * 10 + (bytes[end] - '0');
+      end += 1;
+    }
+    if (end >= bytes.length || bytes[end] != ';' || value > 255) {
+      return null;
+    }
+    char decoded = (char) value;
+    return Chars.isAsciiAlphanumeric(decoded) ? new int[] {value, end + 1 - at} : null;
+  }
+
+  /**
+   * Link text pushed as written, with its closer references outside code read as their character.
+   * An unmatched backtick run counts as open code, so no reference after it is read. Outside code
+   * a backslash escapes the next byte, a backtick included; inside code it is literal.
+   */
+  private static void pushLinkText(StringBuilder cleaned, byte[] bytes, int start, int end) {
+    int copied = start;
+    int codeTicks = 0;
+    int i = start;
+    while (i < end) {
+      if (bytes[i] == '\\' && codeTicks == 0) {
+        i += 2;
+        continue;
+      }
+      if (bytes[i] == '`') {
+        int runStart = i;
+        while (i < end && bytes[i] == '`') {
+          i += 1;
+        }
+        int ticks = i - runStart;
+        if (codeTicks == 0) {
+          codeTicks = ticks;
+        } else if (codeTicks == ticks) {
+          codeTicks = 0;
+        }
+        continue;
+      }
+      if (bytes[i] == '&' && codeTicks == 0) {
+        int[] reference = closerReferenceAt(bytes, i);
+        if (reference != null) {
+          cleaned.append(new String(bytes, copied, i - copied, StandardCharsets.UTF_8));
+          cleaned.append((char) reference[0]);
+          i += reference[1];
+          copied = i;
+          continue;
+        }
+      }
+      i += 1;
+    }
+    cleaned.append(new String(bytes, copied, end - copied, StandardCharsets.UTF_8));
   }
 
   private static int binarySearchByKey(List<int[]> positions, int key) {
@@ -768,7 +873,10 @@ public final class Url {
    * {@code null}, so resolution stays on {@code origin}.
    */
   public static String resolveBaseHref(String href, String origin) {
-    String resolved = resolveUrl(trimUrlC0(href), origin, false);
+    String resolved = resolveUrl(href, origin, false);
+    if (Scan.utf8Length(resolved) > MAX_BASE_HREF_LEN) {
+      return null;
+    }
     BaseUrl base = BaseUrl.split(resolved);
     if (base == null) {
       return null;
@@ -803,6 +911,8 @@ public final class Url {
    * @param origin nullable base URL
    */
   public static String resolveUrl(String url, String origin, boolean clean) {
+    // Read it as the URL parser and isSafeHtmlUrl do: padding never makes it relative.
+    url = trimUrl(url);
     if (url.isEmpty() || url.charAt(0) == '#') {
       return url;
     }
