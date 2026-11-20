@@ -11,7 +11,7 @@
 
   <name>mdream4j parent</name>
   <description>Fast, dependency-free HTML to Markdown converter for Java: a port of mdream</description>
-  <url>https://github.com/fbricon/mdream4j</url>
+  <url>https://github.com/mdream4j/mdream4j</url>
 
   <licenses>
     <license>
@@ -30,9 +30,9 @@
   </developers>
 
   <scm>
-    <connection>scm:git:https://github.com/fbricon/mdream4j.git</connection>
-    <developerConnection>scm:git:git@github.com:fbricon/mdream4j.git</developerConnection>
-    <url>https://github.com/fbricon/mdream4j</url>
+    <connection>scm:git:https://github.com/mdream4j/mdream4j.git</connection>
+    <developerConnection>scm:git:git@github.com:mdream4j/mdream4j.git</developerConnection>
+    <url>https://github.com/mdream4j/mdream4j</url>
   </scm>
 
   <modules>
