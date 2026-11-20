@@ -1,11 +1,11 @@
-import io.github.fbricon.mdream4j.Clean;
-import io.github.fbricon.mdream4j.Extraction;
-import io.github.fbricon.mdream4j.Filter;
-import io.github.fbricon.mdream4j.Frontmatter;
-import io.github.fbricon.mdream4j.Options;
-import io.github.fbricon.mdream4j.OutputFormat;
-import io.github.fbricon.mdream4j.Plugins;
-import io.github.fbricon.mdream4j.TagOverride;
+import io.github.mdream4j.Clean;
+import io.github.mdream4j.Extraction;
+import io.github.mdream4j.Filter;
+import io.github.mdream4j.Frontmatter;
+import io.github.mdream4j.Options;
+import io.github.mdream4j.OutputFormat;
+import io.github.mdream4j.Plugins;
+import io.github.mdream4j.TagOverride;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,7 +14,7 @@ import java.util.Map;
 /**
  * Minimal JSON reader and corpus-options mapping shared by the differential probes.
  *
- * <p>The mapping mirrors {@code mdream4j/src/test/java/io/github/fbricon/mdream4j/Corpus.java}
+ * <p>The mapping mirrors {@code mdream4j/src/test/java/io/github/mdream4j/Corpus.java}
  * so probe cases use exactly the options the golden corpus recorded. Unknown option names fail
  * loudly instead of silently comparing against default-option output.
  */

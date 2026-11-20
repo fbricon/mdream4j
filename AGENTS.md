@@ -43,7 +43,7 @@ cargo build --release --manifest-path tools/reference/Cargo.toml
 
 | Path | Purpose |
 |---|---|
-| `mdream4j/src/main/java/io/github/fbricon/mdream4j/` | Public API; only this package is exported. |
+| `mdream4j/src/main/java/io/github/mdream4j/` | Public API; only this package is exported. |
 | `mdream4j/src/main/java/.../internal/` | Parser, state machine, output emitters. Not API. |
 | `mdream4j/src/test/java/` | JUnit 5 tests, including corpus parity tests. |
 | `mdream4j/src/test/resources/golden/expected.jsonl` | Generated golden corpus, loaded from the test classpath. |

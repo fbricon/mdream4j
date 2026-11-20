@@ -18,8 +18,8 @@ chunk sizes.
 ## Usage
 
 ```java
-import io.github.fbricon.mdream4j.HtmlToMarkdown;
-import io.github.fbricon.mdream4j.Options;
+import io.github.mdream4j.HtmlToMarkdown;
+import io.github.mdream4j.Options;
 
 String markdown = HtmlToMarkdown.convert("<h1>Hello</h1><p>World</p>");
 
@@ -66,8 +66,8 @@ HTML and splits in one call.
 |---|---|
 | Bytecode / API | Java 11 (`--release 11`) |
 | Runtime dependencies | none |
-| JPMS module | `io.github.fbricon.mdream4j` |
-| OSGi | `Bundle-SymbolicName: io.github.fbricon.mdream4j`, `Export-Package` limited to the public API |
+| JPMS module | `io.github.mdream4j` |
+| OSGi | `Bundle-SymbolicName: io.github.mdream4j`, `Export-Package` limited to the public API |
 | GraalVM native-image | zero configuration; `--no-fallback` builds |
 | Threading | no global state; converters are immutable, streams are per conversion |
 

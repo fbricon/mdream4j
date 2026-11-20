@@ -16,8 +16,8 @@ cd "$(dirname "$0")/../.."
 
 MVN="${MVN:-./mvnw}"
 TARGET="tools/native-smoke/target"
-SOURCE="tools/native-smoke/src/io/github/fbricon/mdream4j/smoke/NativeSmoke.java"
-MAIN="io.github.fbricon.mdream4j.smoke.NativeSmoke"
+SOURCE="tools/native-smoke/src/io/github/mdream4j/smoke/NativeSmoke.java"
+MAIN="io.github.mdream4j.smoke.NativeSmoke"
 
 if ! command -v native-image >/dev/null 2>&1; then
   echo "native-image not found on PATH." >&2

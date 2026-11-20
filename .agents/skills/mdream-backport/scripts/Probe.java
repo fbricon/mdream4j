@@ -1,7 +1,7 @@
-import io.github.fbricon.mdream4j.HtmlToMarkdown;
-import io.github.fbricon.mdream4j.MdreamResult;
-import io.github.fbricon.mdream4j.Options;
-import io.github.fbricon.mdream4j.OutputFormat;
+import io.github.mdream4j.HtmlToMarkdown;
+import io.github.mdream4j.MdreamResult;
+import io.github.mdream4j.Options;
+import io.github.mdream4j.OutputFormat;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
