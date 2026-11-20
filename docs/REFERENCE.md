@@ -15,20 +15,17 @@ It has three jobs:
 
 [`tools/upstream`](../tools/upstream) is a shallow submodule of
 [mdream](https://github.com/harlan-zw/mdream) at
-**[`9ea07b84`](https://github.com/harlan-zw/mdream/commit/9ea07b841c29f7d26ebb4122829ecb3201265bc3)**,
-the [2.0.3 release](https://github.com/harlan-zw/mdream/releases/tag/v2.0.3) plus the thirteen
-post-release fixes merged on `main` (issues #386, #420, #445–#451 and the workspace dependency
-refresh). The npm `2.0.3` package state is
-[`55937d7c`](https://github.com/harlan-zw/mdream/commit/55937d7ccf3d3b19de393504ed6a569be9440e46);
-the [`v2.0.3` git tag](https://github.com/harlan-zw/mdream/releases/tag/v2.0.3)
-([`a7a8802`](https://github.com/harlan-zw/mdream/commit/a7a88026a221126b7e21c579ed41dd2ebb6cb809))
-is 66 commits earlier and is **not** the parity target.
+**[`63bfc0a`](https://github.com/harlan-zw/mdream/commit/63bfc0a6d86b5165833fd353d415415bf55cd561)**,
+the [`v2.2.0` release](https://github.com/harlan-zw/mdream/releases/tag/v2.2.0). It carries every
+commit merged since the previous pin,
+[`9ea07b84`](https://github.com/harlan-zw/mdream/commit/9ea07b841c29f7d26ebb4122829ecb3201265bc3)
+(2.0.3 plus thirteen post-release fixes), and the port covers that whole range.
 
 ```shell
 git submodule update --init --depth 1 tools/upstream
 cd tools/upstream
-git fetch --depth 1 origin 9ea07b841c29f7d26ebb4122829ecb3201265bc3
-git checkout 9ea07b84
+git fetch --depth 1 origin 63bfc0a6d86b5165833fd353d415415bf55cd561
+git checkout 63bfc0a
 ```
 
 This section is the canonical record of the pin; `README.md` and `AGENTS.md` link here.

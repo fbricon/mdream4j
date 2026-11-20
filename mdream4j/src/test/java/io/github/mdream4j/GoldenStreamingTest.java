@@ -48,7 +48,7 @@ class GoldenStreamingTest {
   @Test
   void corpusDoesNotShrink() throws IOException {
     int size = Corpus.loadCases().size();
-    assertTrue(size >= 1218, "corpus must not shrink: " + size);
+    assertTrue(size >= 1364, "corpus must not shrink: " + size);
   }
 
   static Stream<Arguments> cases() throws IOException {

@@ -411,11 +411,10 @@ final class Scan {
   static TagScan processTagAttributes(
       String htmlChunk,
       int position,
-      TagHandler tagHandler,
+      boolean selfClosing,
       int attrMask,
       AttrBudget budget,
       Attributes out) {
-    boolean selfClosing = tagHandler != null && tagHandler.isSelfClosing;
     return scanTag(
         htmlChunk, position, selfClosing, attrMask != Consts.ATTR_NONE, attrMask, budget, out);
   }
@@ -467,9 +466,18 @@ final class Scan {
         }
         continue;
       }
-      if (attributeState != ST_UNQUOTED_VALUE && c == '/') {
-        // The `>` that would make this self-closing is in the next chunk. Feeding
-        // the `/` to the tokenizer now would bury it in an attribute name.
+      if (c == '/'
+          && (attributeState == ST_GAP
+              || attributeState == ST_NAME
+              || attributeState == ST_AFTER_NAME)) {
+        // Outside a value `/` ends the name; only a `>` right after it self-closes.
+        if (extract) {
+          scan.finish(htmlChunk, i);
+          scan.state = ST_GAP;
+        } else {
+          state = ST_GAP;
+        }
+        // The `>` that would make this self-closing is in the next chunk.
         if (i + 1 == chunkLength) {
           TagCarry carry =
               extract
@@ -479,9 +487,10 @@ final class Scan {
           return TagScan.suspended(chunkLength, carry);
         }
         if (htmlChunk.charAt(i + 1) == '>') {
-          scan.finish(htmlChunk, i);
           return TagScan.done(i + 2, true, scan.budget.overflow);
         }
+        i += 1;
+        continue;
       }
       if (c == '>') {
         scan.finish(htmlChunk, i);
@@ -710,17 +719,24 @@ final class Scan {
   private static int stepWithoutExtraction(int state, char quote, char c) {
     switch (state) {
       case ST_GAP:
-        return isWhitespace(c) ? ST_GAP : ST_NAME;
+        // Outside a value `/` only separates attributes, as scanTagAttributes reads it.
+        return isWhitespace(c) || c == '/' ? ST_GAP : ST_NAME;
       case ST_NAME:
         if (c == '=') {
           return ST_BEFORE_VALUE;
         }
-        return isWhitespace(c) ? ST_AFTER_NAME : ST_NAME;
+        if (isWhitespace(c)) {
+          return ST_AFTER_NAME;
+        }
+        return c == '/' ? ST_GAP : ST_NAME;
       case ST_AFTER_NAME:
         if (c == '=') {
           return ST_BEFORE_VALUE;
         }
-        return isWhitespace(c) ? ST_AFTER_NAME : ST_NAME;
+        if (isWhitespace(c)) {
+          return ST_AFTER_NAME;
+        }
+        return c == '/' ? ST_GAP : ST_NAME;
       case ST_BEFORE_VALUE:
         if (c == '"' || c == '\'') {
           return ST_QUOTED;
@@ -866,35 +882,6 @@ final class Scan {
       quote = 0;
     }
 
-    /** The {@code /} held over from the previous chunk was not part of {@code />}. */
-    void replaySlash(int mask, Attributes out) {
-      switch (state) {
-        case ST_GAP:
-          start();
-          state = ST_NAME;
-          pushName(mask, "/");
-          break;
-        case ST_NAME:
-          pushName(mask, "/");
-          break;
-        case ST_AFTER_NAME:
-          emit(mask, out, false);
-          state = ST_NAME;
-          pushName(mask, "/");
-          break;
-        case ST_BEFORE_VALUE:
-          state = ST_UNQUOTED_VALUE;
-          pushValue(mask, "/");
-          break;
-        case ST_UNQUOTED_VALUE:
-        case ST_QUOTED:
-          pushValue(mask, "/");
-          break;
-        default:
-          break;
-      }
-    }
-
     /** Consume the name run starting at {@code from}, whose first char does not end it. */
     int runName(int mask, String chunk, int from) {
       int end = from + 1;
@@ -962,10 +949,8 @@ final class Scan {
       }
       carry.slash = false;
       if (htmlChunk.charAt(i) == '>') {
-        carry.finish(mask, out);
         return TagResume.done(i + 1, true);
       }
-      carry.replaySlash(mask, out);
     }
 
     while (i < chunkLength) {
@@ -973,15 +958,21 @@ final class Scan {
 
       // Inside a quoted value nothing is markup.
       if (carry.state != ST_QUOTED) {
-        if (carry.state != ST_UNQUOTED_VALUE && c == '/') {
+        // The attribute before the `/` was stored when it suspended, leaving `Gap`.
+        if (c == '/'
+            && (carry.state == ST_GAP
+                || carry.state == ST_NAME
+                || carry.state == ST_AFTER_NAME)) {
+          carry.finish(mask, out);
           if (i + 1 == chunkLength) {
             carry.slash = true;
             return TagResume.incomplete(chunkLength);
           }
           if (htmlChunk.charAt(i + 1) == '>') {
-            carry.finish(mask, out);
             return TagResume.done(i + 2, true);
           }
+          i += 1;
+          continue;
         }
         if (c == '>') {
           carry.finish(mask, out);

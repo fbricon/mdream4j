@@ -30,6 +30,14 @@ final class Chars {
     return c <= 32 && ((WHITESPACE_MASK >>> c) & 1) == 1;
   }
 
+  /**
+   * Whether the char is a blank or a delimiter an inline element opens with. Output made of these
+   * alone may still be taken back.
+   */
+  static boolean isTransientOutput(char c) {
+    return isAsciiWhitespace(c) || c == '*' || c == '~' || c == '`' || c == '"';
+  }
+
   /** Rust's {@code char::is_whitespace}: the Unicode {@code White_Space} set. */
   static boolean isUnicodeWhitespace(char c) {
     switch (c) {
@@ -59,6 +67,14 @@ final class Chars {
 
   static boolean isAsciiAlphanumeric(char c) {
     return isAsciiAlphabetic(c) || (c >= '0' && c <= '9');
+  }
+
+  /** Rust's {@code u8::is_ascii_punctuation}. */
+  static boolean isAsciiPunctuation(char c) {
+    return (c >= '!' && c <= '/')
+        || (c >= ':' && c <= '@')
+        || (c >= '[' && c <= '`')
+        || (c >= '{' && c <= '~');
   }
 
   static char asciiLower(char c) {
@@ -145,6 +161,24 @@ final class Chars {
     }
     for (int i = 0; i < length; i++) {
       if (value.charAt(start + i) != expected.charAt(i)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Whether the whole tail {@code value[start, value.length())} is a case-insensitive prefix of
+   * {@code expected}.
+   */
+  static boolean tailIsAsciiCaseInsensitivePrefixOf(
+      CharSequence expected, CharSequence value, int start) {
+    int length = value.length() - start;
+    if (start < 0 || length < 0 || length > expected.length()) {
+      return false;
+    }
+    for (int i = 0; i < length; i++) {
+      if (!asciiEqualsIgnoreCase(value.charAt(start + i), expected.charAt(i))) {
         return false;
       }
     }
