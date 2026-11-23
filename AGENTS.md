@@ -101,9 +101,12 @@ differential probe.
 The skill's **Finish checklist** is authoritative. In this repository it means:
 
 - [ ] `./mvnw -o -pl mdream4j test` and `./mvnw -Pwith-reference verify` pass.
-- [ ] One-shot and streaming differentials report 0 mismatches.
+- [ ] One-shot and streaming differentials report 0 mismatches, including the
+      harvested upstream literals.
+- [ ] Goldens regenerated from the reference; the four corpus shrink guards and
+      the documented counts agree.
 - [ ] No debug instrumentation left behind.
-- [ ] Upstream pin, `README.md` and `docs/REFERENCE.md` agree.
+- [ ] Upstream pin, `README.md`, `AGENTS.md` and `docs/REFERENCE.md` agree.
 
 When bumping the pin, regenerate the goldens in the same change.
 `docs/REVIEW-2026-11.md` is a dated snapshot; do not rewrite it.

@@ -14,13 +14,16 @@ can be checked against the surrounding test before being trusted.
 
 Usage:
     python3 extract-rust-cases.py [--upstream DIR] [--output FILE]
-                                  [--source FILE ...] [--stats]
+                                  [--source FILE ...] [--all-tests] [--stats]
                                   [--max-bytes N]
 
 Defaults: the mdream4j checkout is ``$MDREAM_REPO``, else the nearest ancestor
 of the current directory or of this script that contains
-``tools/reference/Cargo.toml``. Upstream is ``$MDREAM_UPSTREAM`` or the sibling
-``../mdream`` of that checkout; output is ``<skill>/work/rust-cases.jsonl``.
+``tools/reference/Cargo.toml``. Upstream is ``$MDREAM_UPSTREAM``, else
+``<checkout>/tools/upstream``, else the sibling ``../mdream``. Output is
+``<skill>/work/rust-cases.jsonl``. The six default suites are the core
+conversion/streaming ones; ``--all-tests`` scans every top-level ``*.rs``
+under ``crates/core/tests`` (the broad harvest pass).
 """
 
 from __future__ import annotations
@@ -65,6 +68,9 @@ def _default_upstream() -> Path:
     env = os.environ.get("MDREAM_UPSTREAM")
     if env:
         return Path(env).expanduser()
+    submodule = _default_repo() / "tools" / "upstream"
+    if (submodule / "crates" / "core").is_dir():
+        return submodule
     return _default_repo().parent / "mdream"
 
 
@@ -265,13 +271,21 @@ def main(argv: list[str]) -> int:
         help="test source file(s); default: the six upstream test suites",
     )
     parser.add_argument("--max-bytes", type=int, default=2 * 1024 * 1024)
+    parser.add_argument(
+        "--all-tests",
+        action="store_true",
+        help="scan every top-level *.rs under crates/core/tests, not just the six defaults",
+    )
     parser.add_argument("--stats", action="store_true")
     args = parser.parse_args(argv)
 
+    tests_dir = args.upstream / "crates" / "core" / "tests"
     if args.source:
         sources = args.source
+    elif args.all_tests:
+        sources = sorted(tests_dir.glob("*.rs"))
     else:
-        sources = [args.upstream / "crates" / "core" / "tests" / name for name in DEFAULT_TEST_FILES]
+        sources = [tests_dir / name for name in DEFAULT_TEST_FILES]
     missing = [str(p) for p in sources if not p.is_file()]
     if missing:
         parser.error("missing source file(s): " + ", ".join(missing))
