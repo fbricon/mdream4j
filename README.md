@@ -11,9 +11,9 @@ A fast, dependency-free HTML to Markdown converter for Java, ported from
 - **JPMS** module and **OSGi** bundle metadata
 - One-shot and streaming conversion, GFM output
 
-Status: **0.1.0-SNAPSHOT** (in development). The conversion core is ported and verified against the
-Rust reference on a 1,364-case corpus, for markdown, text, HTML, metadata and streaming at six
-chunk sizes.
+Status: **2.2.0.1-SNAPSHOT** (in development; tracks mdream 2.2.0). The conversion core is ported
+and verified against the Rust reference on a 1,364-case corpus, for markdown, text, HTML, metadata
+and streaming at six chunk sizes.
 
 ## Usage
 
@@ -80,6 +80,13 @@ make native-smoke   # needs GraalVM CE 21 or 25 on PATH
 
 On GraalVM CE 25.0.2 the `--no-fallback` build succeeds with no configuration and reaches the
 first conversion in 0.9 ms.
+
+## Versioning
+
+Versions are `<mdream-version>.<port-revision>`: `2.2.0.1` is the first release tracking mdream
+2.2.0, and the last segment increments for Java-side changes that do not move upstream. The
+upstream release and parity commit are also recorded as POM properties and manifest headers. See
+[`docs/VERSIONING.md`](docs/VERSIONING.md).
 
 ## Build
 

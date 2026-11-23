@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.github.mdream4j</groupId>
     <artifactId>mdream4j-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>2.2.0.1-SNAPSHOT</version>
   </parent>
 
   <artifactId>mdream4j</artifactId>
@@ -41,6 +41,8 @@ Bundle-Name: mdream4j
 Bundle-Vendor: mdream4j contributors
 Bundle-DocURL: https://github.com/mdream4j/mdream4j
 Bundle-SCM: url="https://github.com/mdream4j/mdream4j",connection="scm:git:https://github.com/mdream4j/mdream4j.git",developer-connection="scm:git:git@github.com:mdream4j/mdream4j.git",tag=HEAD
+Mdream4j-Upstream-Version: ${mdream.upstream.version}
+Mdream4j-Upstream-Commit: ${mdream.upstream.commit}
 Bundle-RequiredExecutionEnvironment: JavaSE-11
 Export-Package: io.github.mdream4j;version="${project.version}"
 Private-Package: io.github.mdream4j.internal

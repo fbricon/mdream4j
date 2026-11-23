@@ -80,6 +80,16 @@ class PackagingTest {
   }
 
   @Test
+  void osgiManifestRecordsTheUpstreamParityPin() throws IOException {
+    Attributes attributes = manifest();
+
+    assertEquals("2.2.0", string(attributes, "Mdream4j-Upstream-Version"));
+    assertEquals(
+        "63bfc0a6d86b5165833fd353d415415bf55cd561",
+        string(attributes, "Mdream4j-Upstream-Commit"));
+  }
+
+  @Test
   void bytecodeTargetsJava11() throws IOException {
     Path classFile = CLASSES.resolve("io/github/mdream4j/HtmlToMarkdown.class");
     byte[] header = Files.readAllBytes(classFile);

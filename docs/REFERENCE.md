@@ -21,6 +21,9 @@ commit merged since the previous pin,
 [`9ea07b84`](https://github.com/harlan-zw/mdream/commit/9ea07b841c29f7d26ebb4122829ecb3201265bc3)
 (2.0.3 plus thirteen post-release fixes), and the port covers that whole range.
 
+The project version records this release as its first three segments (`2.2.0.N`); see
+[`VERSIONING.md`](VERSIONING.md) for the scheme and the port-revision rules.
+
 ```shell
 git submodule update --init --depth 1 tools/upstream
 cd tools/upstream

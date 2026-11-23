@@ -106,7 +106,8 @@ The skill's **Finish checklist** is authoritative. In this repository it means:
 - [ ] Goldens regenerated from the reference; the four corpus shrink guards and
       the documented counts agree.
 - [ ] No debug instrumentation left behind.
-- [ ] Upstream pin, `README.md`, `AGENTS.md` and `docs/REFERENCE.md` agree.
+- [ ] Upstream pin, `README.md`, `AGENTS.md`, `docs/REFERENCE.md`, `docs/VERSIONING.md`
+      and the `mdream.upstream.*` POM properties agree.
 
 When bumping the pin, regenerate the goldens in the same change.
 `docs/REVIEW-2026-11.md` is a dated snapshot; do not rewrite it.

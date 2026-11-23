@@ -215,8 +215,11 @@ grep for the old number and update every hit:
 - `mdream4j/src/test/java/io/github/mdream4j/internal/StreamingDrainTest.java`
 - `mdream4j/src/test/java/io/github/mdream4j/internal/FastPathParityTest.java`
 
-Update the counts and pin in `AGENTS.md`, `README.md` and `docs/REFERENCE.md` in
-the same change. Leave dated snapshots such as `docs/REVIEW-2026-11.md` alone.
+Update the counts and pin in `AGENTS.md`, `README.md`, `docs/REFERENCE.md`,
+`docs/VERSIONING.md` and the `mdream.upstream.*` POM properties in the same change.
+A new upstream release also moves the project version to `<new-upstream>.1-SNAPSHOT`;
+see `docs/VERSIONING.md`. Leave dated snapshots such as `docs/REVIEW-2026-11.md`
+alone.
 
 ## Git and PR hygiene
 
@@ -239,7 +242,8 @@ the same change. Leave dated snapshots such as `docs/REVIEW-2026-11.md` alone.
 - [ ] Golden corpus regenerated; `cmp` against a fresh reference dump is clean;
       line counts match; the four shrink guards are raised.
 - [ ] No `MD_DBG` / debug prints left in Java or Rust.
-- [ ] Upstream pin, `README.md`, `AGENTS.md` and `docs/REFERENCE.md` agree; no
+- [ ] Upstream pin, `README.md`, `AGENTS.md`, `docs/REFERENCE.md`,
+      `docs/VERSIONING.md` and the `mdream.upstream.*` POM properties agree; no
       dated snapshot rewritten.
 - [ ] `git status` shows only intended files (no `target/`, no scratch), and the
       submodule tree is clean.
